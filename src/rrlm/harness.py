@@ -1,0 +1,199 @@
+"""Build the RLM-first agent: PredictRLM + doctrine skill + depth-gated rlm_spawn."""
+
+from __future__ import annotations
+
+from collections import Counter
+
+import dspy
+from predict_rlm import PredictRLM
+
+from rrlm.config import MODELS, HarnessConfig
+from rrlm.playbooks import doctrine_skill
+
+
+class SharedLM(dspy.LM):
+    """LM whose no-argument copy() returns itself.
+
+    predict-rlm copies the lm/sub_lm instances it is given (predict_rlm.py:795),
+    so with a plain dspy.LM each recursion level accumulates history on a private
+    copy and per-run accounting harvests nothing. Identity-copy keeps every call
+    at every depth in one .history. copy() with overrides still returns a real
+    copy, so per-call config overrides keep their isolation semantics.
+    """
+
+    def copy(self, **kwargs):
+        if not kwargs:
+            return self
+        return super().copy(**kwargs)
+
+
+class RlmTask(dspy.Signature):
+    """Solve the task by writing Python in the REPL over the `data` variable."""
+
+    task: str = dspy.InputField(desc="What to accomplish")
+    data: str = dspy.InputField(desc="The working set; explore it programmatically")
+    answer: str = dspy.OutputField(desc="The final, verified answer")
+
+
+class BaselineTask(dspy.Signature):
+    """Answer the task using the provided data."""
+
+    task: str = dspy.InputField()
+    data: str = dspy.InputField()
+    answer: str = dspy.OutputField()
+
+
+def build_lm(
+    model_key: str,
+    api_key: str,
+    max_tokens: int,
+    temperature: float,
+    reasoning: str = "default",
+) -> dspy.LM:
+    spec = MODELS[model_key]
+    if max_tokens > spec.max_output_tokens:
+        raise ValueError(
+            f"max_tokens {max_tokens} exceeds {model_key} limit {spec.max_output_tokens}"
+        )
+
+    if spec.supports_response_schema:
+        # make DSPy/litellm emit response_format json_schema (LM Studio-compatible)
+        # instead of json_object, which LM Studio's OpenAI endpoint rejects.
+        import litellm
+
+        litellm.register_model({spec.litellm_id: {"supports_response_schema": True}})
+
+    extra_body: dict = {}
+    if spec.provider_order:
+        extra_body["provider"] = {
+            "order": list(spec.provider_order),
+            "allow_fallbacks": False,
+        }
+
+    if reasoning not in ("default", "off", "low", "medium", "high"):
+        raise ValueError(f"unknown reasoning setting: {reasoning}")
+    if spec.is_openrouter:
+        if reasoning == "off":
+            extra_body["reasoning"] = {"enabled": False}
+        elif reasoning in ("low", "medium", "high"):
+            extra_body["reasoning"] = {"effort": reasoning}
+    else:
+        # local mlx_lm/vllm: thinking is a chat-template kwarg. effort levels
+        # collapse to on/off since the template only exposes a boolean.
+        if reasoning == "off":
+            extra_body["chat_template_kwargs"] = {"enable_thinking": False}
+        elif reasoning in ("low", "medium", "high"):
+            extra_body["chat_template_kwargs"] = {"enable_thinking": True}
+
+    kwargs: dict = {}
+    if extra_body:
+        kwargs["extra_body"] = extra_body
+    if spec.api_base:  # local endpoint (ollama/vllm); key is usually a placeholder
+        kwargs["api_base"] = spec.api_base
+        # local generation is far slower than hosted; the 600s litellm default
+        # turns one slow turn into a 4x-retried multi-hour stall. Give locals
+        # room and do not retry a timeout (it will just time out again).
+        kwargs["timeout"] = 1800
+        kwargs["num_retries"] = 0
+    else:
+        kwargs["num_retries"] = 3
+    return SharedLM(
+        spec.litellm_id,
+        api_key=api_key,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        cache=False,  # experiments must measure real calls, never cache hits
+        **kwargs,
+    )
+
+
+def _set_sandbox_exec_timeout(seconds: float) -> None:
+    """Raise the JspiInterpreter per-turn exec timeout (default 300s).
+
+    PredictRLM exposes no pass-through for it, so patch the constructor default.
+    A wide local fan-out runs as one REPL turn over serial leaves and otherwise
+    trips the 300s cap mid-gather. Idempotent.
+    """
+    from predict_rlm import interpreter as prlm_interp
+
+    if getattr(prlm_interp.JspiInterpreter, "_rrlm_exec_timeout", None) == seconds:
+        return
+    base_init = getattr(
+        prlm_interp.JspiInterpreter, "_rrlm_base_init", prlm_interp.JspiInterpreter.__init__
+    )
+
+    def patched_init(self, *args, exec_timeout=seconds, **kwargs):
+        base_init(self, *args, exec_timeout=exec_timeout, **kwargs)
+
+    prlm_interp.JspiInterpreter._rrlm_base_init = base_init
+    prlm_interp.JspiInterpreter.__init__ = patched_init
+    prlm_interp.JspiInterpreter._rrlm_exec_timeout = seconds
+
+
+def build_rlm(
+    cfg: HarnessConfig,
+    main_lm: dspy.LM,
+    sub_lm: dspy.LM,
+    *,
+    depth: int = 0,
+    spawn_stats: Counter | None = None,
+) -> PredictRLM:
+    """Construct the agent for one depth level.
+
+    LM instances are shared across all depths so accounting stays centralized
+    in their .history. `spawn_stats` counts rlm_spawn invocations per depth.
+    """
+    spawn_stats = spawn_stats if spawn_stats is not None else Counter()
+    sbx_config = None
+    if cfg.backend == "jspi":
+        if cfg.sandbox_exec_timeout != 300.0:
+            _set_sandbox_exec_timeout(cfg.sandbox_exec_timeout)
+    elif cfg.backend == "sbx":
+        # Docker sandbox has its own exec cap; raise it for slow local leaves.
+        from predict_rlm import SbxConfig
+
+        sbx_config = SbxConfig(exec_timeout=cfg.sandbox_exec_timeout)
+    tools = []
+    if depth < cfg.max_depth:
+        tools.append(_make_rlm_spawn(cfg, main_lm, sub_lm, depth, spawn_stats))
+
+    rlm = PredictRLM(
+        RlmTask,
+        lm=main_lm,
+        sub_lm=sub_lm,
+        skills=[doctrine_skill()],
+        tools=tools,
+        max_iterations=cfg.max_iterations,
+        max_llm_calls=cfg.max_llm_calls,
+        sandbox_backend=cfg.backend,
+        sbx_config=sbx_config,
+    )
+    rlm.spawn_stats = spawn_stats  # surfaced in the run result
+    return rlm
+
+
+def _make_rlm_spawn(
+    cfg: HarnessConfig,
+    main_lm: dspy.LM,
+    sub_lm: dspy.LM,
+    depth: int,
+    spawn_stats: Counter,
+):
+    child_depth = depth + 1
+
+    async def rlm_spawn(task: str, data: str) -> str:
+        """Spawn a child recursive agent over a large data slice.
+
+        Use ONLY when a sub-problem's working set is too large to handle with a
+        few predict() calls in this REPL (capacity-driven recursion). The child
+        gets its own REPL with the same tools. Returns the child's final answer
+        as a string. Prefer breadth (parallel predict calls) over depth.
+        """
+        spawn_stats[child_depth] += 1
+        child = build_rlm(
+            cfg, main_lm, sub_lm, depth=child_depth, spawn_stats=spawn_stats
+        )
+        prediction = await child.acall(task=task, data=data)
+        return prediction.answer
+
+    return rlm_spawn

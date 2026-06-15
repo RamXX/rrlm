@@ -1,0 +1,91 @@
+"""Harness construction tests -- no network calls."""
+
+from collections import Counter
+
+import pytest
+
+from rrlm.config import HarnessConfig
+from rrlm.harness import build_lm, build_rlm
+
+
+def _lms():
+    key = "sk-or-test"
+    cfg = HarnessConfig()
+    main = build_lm(cfg.main_model, key, cfg.main_max_tokens, cfg.temperature)
+    sub = build_lm(cfg.sub_model, key, cfg.sub_max_tokens, cfg.temperature)
+    return cfg, main, sub
+
+
+def test_shared_lm_noarg_copy_is_identity():
+    _, main, _ = _lms()
+    assert main.copy() is main
+
+
+def test_shared_lm_copy_with_overrides_is_new_instance():
+    _, main, _ = _lms()
+    clone = main.copy(temperature=0.9)
+    assert clone is not main
+    assert clone.kwargs["temperature"] == 0.9
+
+
+def test_build_lm_rejects_excess_max_tokens():
+    with pytest.raises(ValueError, match="exceeds"):
+        build_lm("qwen3.7-max", "k", 100_000, 0.2)
+
+
+def test_build_lm_disables_cache():
+    _, main, _ = _lms()
+    assert main.cache is False
+
+
+def test_build_rlm_exposes_spawn_below_max_depth():
+    cfg, main, sub = _lms()
+    rlm = build_rlm(cfg, main, sub, depth=0)
+    tool_names = set(rlm.tools.keys()) if isinstance(rlm.tools, dict) else {
+        t.__name__ for t in rlm.tools
+    }
+    assert any("rlm_spawn" in name for name in tool_names)
+
+
+def test_build_rlm_omits_spawn_at_max_depth():
+    cfg, main, sub = _lms()
+    rlm = build_rlm(cfg, main, sub, depth=cfg.max_depth)
+    tool_names = set(rlm.tools.keys()) if isinstance(rlm.tools, dict) else {
+        t.__name__ for t in rlm.tools
+    }
+    assert not any("rlm_spawn" in name for name in tool_names)
+
+
+def test_set_sandbox_exec_timeout_is_idempotent_and_applies():
+    from predict_rlm import interpreter as prlm_interp
+
+    from rrlm.harness import _set_sandbox_exec_timeout
+
+    original = prlm_interp.JspiInterpreter.__init__
+    try:
+        _set_sandbox_exec_timeout(1234.0)
+        assert prlm_interp.JspiInterpreter._rrlm_exec_timeout == 1234.0
+        patched = prlm_interp.JspiInterpreter.__init__
+        _set_sandbox_exec_timeout(1234.0)  # idempotent: no re-wrap
+        assert prlm_interp.JspiInterpreter.__init__ is patched
+        # the patched default is visible on the signature
+        import inspect
+
+        assert (
+            inspect.signature(prlm_interp.JspiInterpreter.__init__)
+            .parameters["exec_timeout"]
+            .default
+            == 1234.0
+        )
+    finally:
+        prlm_interp.JspiInterpreter.__init__ = original
+        for attr in ("_rrlm_exec_timeout", "_rrlm_base_init"):
+            if hasattr(prlm_interp.JspiInterpreter, attr):
+                delattr(prlm_interp.JspiInterpreter, attr)
+
+
+def test_spawn_stats_shared_counter():
+    cfg, main, sub = _lms()
+    stats = Counter()
+    rlm = build_rlm(cfg, main, sub, depth=0, spawn_stats=stats)
+    assert rlm.spawn_stats is stats
