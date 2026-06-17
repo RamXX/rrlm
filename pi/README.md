@@ -53,7 +53,7 @@ Environment knobs read by the extension:
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `RRLM_DIR` | repo root (resolved from the extension path) | rrlm project dir for `uv run` |
-| `RRLM_MAIN` | `qwen3.6-27b-official-local` | orchestrator model key |
+| `RRLM_MAIN` | `qwen3.6-27b-pitune-local` | orchestrator model key |
 | `RRLM_SUB` | `supergemma-26b-local` | leaf model key |
 | `RRLM_BACKEND` | `jspi` | sandbox backend (`jspi` or `sbx`) |
 

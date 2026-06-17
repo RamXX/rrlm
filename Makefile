@@ -41,10 +41,10 @@ clean-runs:
 	rm -rf runs/
 
 # --- Local model servers (settled config) ---
-# Orchestrator: official Qwen3.6-27B Q8 via mlx_lm (autoregressive, reliable) on :8772.
+# Orchestrator: pi-tune Q6_K via llama-server (no-thinking, temp 0.7) on :8773.
 # Leaf: supergemma-26b via DFlash on :8771. Foreground; run each in its own terminal.
 serve-orch:
-	cd $(CURDIR) && ./serve-qwen36.sh
+	cd $(CURDIR) && ./serve-pitune.sh
 
 serve-leaf:
 	/Users/ramirosalas/.local/bin/dflash serve \
@@ -53,11 +53,11 @@ serve-leaf:
 		--host 127.0.0.1 --port 8771 --chat-template-args '{"enable_thinking": false}'
 
 serve-stop:
-	-pkill -f "serve-qwen36.sh|mlx_lm.server.*8772|dflash serve.*8771" 2>/dev/null; echo "stopped local model servers"
+	-pkill -f "serve-pitune.sh|llama-server.*8773|dflash serve.*8771" 2>/dev/null; echo "stopped local model servers"
 
 # RLM-first solve backend (the capability Pi delegates to)
 solve:
-	$(RUN) python -m rrlm.solve -i "$(INSTRUCTION)" -d "$(DATA)" --main-model qwen3.6-27b-official-local --sub-model supergemma-26b-local
+	$(RUN) python -m rrlm.solve -i "$(INSTRUCTION)" -d "$(DATA)" --main-model qwen3.6-27b-pitune-local --sub-model supergemma-26b-local
 
 # Launch pi with the rlm-backend extension + rlm-first skill loaded
 pi-run:

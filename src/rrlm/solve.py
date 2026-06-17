@@ -28,11 +28,10 @@ from rrlm.config import MODELS, HarnessConfig, load_env
 from rrlm.harness import build_lm, build_rlm
 from rrlm.metrics import harvest_lm_history, reconcile, summarize
 
-# Settled defaults from the experiment: official Qwen3.6-27B Q8 served via
-# mlx_lm (autoregressive, reliable -- 2/2 imdb-1000; DFlash's speculative decode
-# hard-failed s43 and its speedup is marginal since leaf fan-out dominates wall
-# time), reasoning off, cheap non-thinking supergemma leaf.
-DEFAULT_MAIN = "qwen3.6-27b-mlx-local"
+# Settled orchestrator (won the local bake-off): the pi-tune Q6_K model served
+# by llama-server (no-thinking native, temp 0.7) + supergemma leaf. reasoning and
+# temperature are resolved per-model from the registry when not overridden.
+DEFAULT_MAIN = "qwen3.6-27b-pitune-local"
 DEFAULT_SUB = "supergemma-26b-local"
 
 
@@ -42,7 +41,8 @@ def solve(
     *,
     main_model: str = DEFAULT_MAIN,
     sub_model: str = DEFAULT_SUB,
-    reasoning: str = "off",
+    reasoning: str | None = None,
+    temperature: float | None = None,
     backend: str = "jspi",
     max_depth: int = 2,
     max_iterations: int = 30,
@@ -53,15 +53,20 @@ def solve(
 
     Returns a dict: answer, wall_clock_s, spawn_stats, usage, error.
 
-    `max_action_retries` defaults to 2 here (production path): it absorbs
-    intermittent malformed/empty action turns that would otherwise abort the run.
+    `reasoning`/`temperature` default to the main model's registry recommendation
+    (e.g. pi-tune: no-thinking native, temp 0.7). `max_action_retries` defaults
+    to 2: it absorbs intermittent malformed/empty action turns.
     """
     api_key = load_env()
-    local = MODELS[main_model].api_base is not None or MODELS[sub_model].api_base is not None
+    spec = MODELS[main_model]
+    reasoning = reasoning if reasoning is not None else spec.default_reasoning
+    temperature = temperature if temperature is not None else spec.default_temperature
+    local = spec.api_base is not None or MODELS[sub_model].api_base is not None
     cfg = HarnessConfig(
         main_model=main_model,
         sub_model=sub_model,
         reasoning=reasoning,
+        temperature=temperature,
         backend=backend,
         max_depth=max_depth,
         max_iterations=max_iterations,
@@ -126,7 +131,11 @@ def main() -> None:
     )
     parser.add_argument("--main-model", default=DEFAULT_MAIN, choices=sorted(MODELS))
     parser.add_argument("--sub-model", default=DEFAULT_SUB, choices=sorted(MODELS))
-    parser.add_argument("--reasoning", default="off", choices=["default", "off", "low", "medium", "high"])
+    parser.add_argument(
+        "--reasoning", default=None, choices=["default", "off", "low", "medium", "high"],
+        help="default: per-model registry recommendation",
+    )
+    parser.add_argument("--temperature", type=float, default=None, help="default: per-model recommendation")
     parser.add_argument("--backend", default="jspi", choices=["jspi", "sbx", "supervisor"])
     parser.add_argument("--max-depth", type=int, default=2)
     parser.add_argument("--action-retries", type=int, default=2, help="per-turn re-asks on parse failure")
@@ -139,6 +148,7 @@ def main() -> None:
         main_model=args.main_model,
         sub_model=args.sub_model,
         reasoning=args.reasoning,
+        temperature=args.temperature,
         backend=args.backend,
         max_depth=args.max_depth,
         max_action_retries=args.action_retries,

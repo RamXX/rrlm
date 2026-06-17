@@ -28,6 +28,11 @@ class ModelSpec:
     # LM Studio rejects response_format json_object but accepts json_schema; set
     # this so DSPy emits json_schema (via litellm) instead of json_object.
     supports_response_schema: bool = False
+    # Per-model recommended sampling/thinking (used when not overridden on the
+    # CLI). e.g. the pi-tune model is no-thinking native (reasoning="default")
+    # and tuned for temperature 0.7; the mlx base models want reasoning="off".
+    default_reasoning: str = "off"
+    default_temperature: float = 0.2
     notes: str = ""
 
     @property
@@ -83,45 +88,23 @@ MODELS: dict[str, ModelSpec] = {
         api_base="http://127.0.0.1:8770/v1",
         notes="local Qwen3.6-27B uncensored (heretic) via mlx_lm.server :8770",
     ),
-    "qwen3.6-27b-official-local": ModelSpec(
-        slug="qwen/qwen3.6-27b",
+    # Settled orchestrator (won the local bake-off): Qwen3.6-27B fine-tuned via
+    # the Pi agent harness for no-thinking agentic coding. Served as Q6_K GGUF
+    # by llama-server (serve-pitune.sh, plain autoregressive -- MTP self-spec was
+    # net-slower on Apple Silicon). No-thinking native; tuned for temp 0.7.
+    # (Superseded local entries -- LM Studio official, MTPLX, DFlash Q8, mxfp8,
+    # mlx int8 -- were removed after their models were deleted; see git history.)
+    "qwen3.6-27b-pitune-local": ModelSpec(
+        slug="Qwen3.6-27B-MTP-pi-tune",  # llama-server serves the one loaded GGUF; id is nominal
         context_length=262_100,
         max_output_tokens=65_536,
         context_is_total=True,
         provider_prefix="openai",
-        api_base="http://127.0.0.1:1234/v1",  # LM Studio
-        supports_response_schema=True,  # LM Studio needs json_schema, not json_object
-        notes="official Qwen3.6-27B via LM Studio; orchestrator-fidelity control",
-    ),
-    "mtp-27b-local": ModelSpec(
-        slug="mtplx-qwen36-27b-optimized-quality",
-        context_length=262_100,
-        max_output_tokens=65_536,
-        context_is_total=True,
-        provider_prefix="openai",
-        api_base="http://127.0.0.1:8000/v1",  # MTP qwen3.6-27b server
-        notes="MTP-optimized Qwen3.6-27B (:8000); reasoning model, thinking not "
-        "cleanly disablable; accepts json_object so no schema flag needed",
-    ),
-    "qwen3.6-27b-dflash-local": ModelSpec(
-        slug="mlx-community/Qwen3.6-27B-8bit",
-        context_length=262_100,
-        max_output_tokens=65_536,
-        context_is_total=True,
-        provider_prefix="openai",
-        api_base="http://127.0.0.1:8770/v1",  # dflash-qwen36.sh serve (DFlash + Q8)
-        notes="official Qwen3.6-27B Q8 MLX via DFlash speculative decoding; "
-        "reliable+fast orchestrator (replaces uncensored heretic and MTPLX)",
-    ),
-    "qwen3.6-27b-mlx-local": ModelSpec(
-        slug="mlx-community/Qwen3.6-27B-8bit",
-        context_length=262_100,
-        max_output_tokens=65_536,
-        context_is_total=True,
-        provider_prefix="openai",
-        api_base="http://127.0.0.1:8772/v1",  # serve-qwen36.sh (mlx_lm, stochastic)
-        notes="official Qwen3.6-27B Q8 via mlx_lm.server (stochastic sampling); "
-        "isolation test vs DFlash determinism",
+        api_base="http://127.0.0.1:8773/v1",  # serve-pitune.sh (llama-server, Q6_K GGUF)
+        default_reasoning="default",  # no-thinking native; do not send enable_thinking
+        default_temperature=0.7,  # card-recommended sampling
+        notes="Qwen3.6-27B fine-tuned via the Pi agent harness for no-thinking "
+        "agentic coding; GGUF via llama-server. Settled orchestrator (2/2, cleanest turns).",
     ),
     "supergemma-26b-local": ModelSpec(
         slug="Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2",

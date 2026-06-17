@@ -151,6 +151,12 @@ def main() -> None:
         default=0,
         help="per-turn action-generation re-asks on parse failure (0 = off)",
     )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="sampling temperature (default: harness 0.2; set per model recommendation)",
+    )
     args = parser.parse_args()
 
     task = TASK_BUILDERS[args.task](size=args.size, seed=args.seed)
@@ -168,6 +174,7 @@ def main() -> None:
         if args.sandbox_exec_timeout
         else (3600.0 if local else 300.0),
         max_action_retries=args.action_retries,
+        **({"temperature": args.temperature} if args.temperature is not None else {}),
     )
     result = run_task(task, args.model, args.condition, cfg)
 
