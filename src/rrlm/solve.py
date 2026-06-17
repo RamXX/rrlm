@@ -28,9 +28,11 @@ from rrlm.config import MODELS, HarnessConfig, load_env
 from rrlm.harness import build_lm, build_rlm
 from rrlm.metrics import harvest_lm_history, reconcile, summarize
 
-# Settled defaults from the experiment: high-fidelity orchestrator (reasoning
-# off -- thinking is a liability for orchestration), cheap non-thinking leaf.
-DEFAULT_MAIN = "qwen3.6-27b-official-local"
+# Settled defaults from the experiment: official Qwen3.6-27B Q8 served via
+# mlx_lm (autoregressive, reliable -- 2/2 imdb-1000; DFlash's speculative decode
+# hard-failed s43 and its speedup is marginal since leaf fan-out dominates wall
+# time), reasoning off, cheap non-thinking supergemma leaf.
+DEFAULT_MAIN = "qwen3.6-27b-mlx-local"
 DEFAULT_SUB = "supergemma-26b-local"
 
 
@@ -44,11 +46,15 @@ def solve(
     backend: str = "jspi",
     max_depth: int = 2,
     max_iterations: int = 30,
+    max_action_retries: int = 2,
     reconcile_cost: bool = True,
 ) -> dict:
     """Run the RLM-first agent over (instruction, data); return answer + metrics.
 
     Returns a dict: answer, wall_clock_s, spawn_stats, usage, error.
+
+    `max_action_retries` defaults to 2 here (production path): it absorbs
+    intermittent malformed/empty action turns that would otherwise abort the run.
     """
     api_key = load_env()
     local = MODELS[main_model].api_base is not None or MODELS[sub_model].api_base is not None
@@ -60,6 +66,7 @@ def solve(
         max_depth=max_depth,
         max_iterations=max_iterations,
         sandbox_exec_timeout=3600.0 if local else 300.0,
+        max_action_retries=max_action_retries,
     )
 
     main_lm = build_lm(main_model, api_key, cfg.main_max_tokens, cfg.temperature, reasoning=reasoning)
@@ -120,8 +127,9 @@ def main() -> None:
     parser.add_argument("--main-model", default=DEFAULT_MAIN, choices=sorted(MODELS))
     parser.add_argument("--sub-model", default=DEFAULT_SUB, choices=sorted(MODELS))
     parser.add_argument("--reasoning", default="off", choices=["default", "off", "low", "medium", "high"])
-    parser.add_argument("--backend", default="jspi", choices=["jspi", "sbx"])
+    parser.add_argument("--backend", default="jspi", choices=["jspi", "sbx", "supervisor"])
     parser.add_argument("--max-depth", type=int, default=2)
+    parser.add_argument("--action-retries", type=int, default=2, help="per-turn re-asks on parse failure")
     parser.add_argument("--json", action="store_true", help="emit full result JSON, not just the answer")
     args = parser.parse_args()
 
@@ -133,6 +141,7 @@ def main() -> None:
         reasoning=args.reasoning,
         backend=args.backend,
         max_depth=args.max_depth,
+        max_action_retries=args.action_retries,
     )
 
     if args.json:

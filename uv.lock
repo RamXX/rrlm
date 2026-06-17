@@ -985,23 +985,53 @@ wheels = [
 
 [[package]]
 name = "predict-rlm"
-version = "0.6.1"
-source = { registry = "https://pypi.org/simple" }
+version = "0.7.0a4"
+source = { editable = "../predict-rlm" }
 dependencies = [
     { name = "deno" },
     { name = "dspy" },
     { name = "nest-asyncio" },
     { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/64/ed/555a3af06530ea4969176677f5a8bcae871d23e385f235c292f53f68d2f1/predict_rlm-0.6.1.tar.gz", hash = "sha256:0210611aa6cfda9af158be6707f590cb3ff00de0595a6129bc65624eef415004", size = 159340 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/af/8027688e24651cb882fb56b39db95d4342f7a80d47961fd323ee95238e47/predict_rlm-0.6.1-py3-none-any.whl", hash = "sha256:a27421eab8062390dae2aef33d14570c4da6ce7369a687541d713b80ee4d81ac", size = 179777 },
+    { name = "pygments" },
+    { name = "tenacity" },
 ]
 
 [package.optional-dependencies]
 gepa = [
     { name = "gepa" },
     { name = "tqdm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "deno", specifier = ">=2" },
+    { name = "dspy", specifier = ">=3.1.2" },
+    { name = "formulas", marker = "extra == 'examples'", specifier = ">=1.2.0" },
+    { name = "gepa", marker = "extra == 'gepa'", specifier = ">=0.0.26" },
+    { name = "kaleido", marker = "extra == 'gepa-viz'", specifier = ">=0.2.0" },
+    { name = "litellm", marker = "extra == 'codex-lm'", specifier = ">=1.50" },
+    { name = "nest-asyncio", specifier = ">=1.6.0" },
+    { name = "openai", marker = "extra == 'codex-lm'", specifier = ">=1.60" },
+    { name = "openpyxl", marker = "extra == 'examples'", specifier = ">=3.1.0" },
+    { name = "plotly", marker = "extra == 'gepa-viz'", specifier = ">=5.0.0" },
+    { name = "pydantic", specifier = ">=2.8.2,<3" },
+    { name = "pygments", specifier = ">=2.0.0" },
+    { name = "pymupdf", marker = "extra == 'examples'", specifier = ">=1.24.0" },
+    { name = "tenacity", specifier = ">=8.2.0" },
+    { name = "tenacity", marker = "extra == 'codex-lm'", specifier = ">=9.1.4" },
+    { name = "tqdm", marker = "extra == 'gepa'", specifier = ">=4.0.0" },
+    { name = "websockets", marker = "extra == 'sbx'", specifier = ">=15.0,<16" },
+]
+provides-extras = ["sbx", "gepa", "codex-lm", "gepa-viz", "examples"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "ipykernel", specifier = ">=6.29.0" },
+    { name = "pytest", specifier = ">=8.3.1,<9" },
+    { name = "pytest-asyncio", specifier = ">=0.23.8,<0.24" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "pytest-testdox", specifier = ">=3.1.0,<4" },
+    { name = "ruff", specifier = ">=0.11.5" },
 ]
 
 [[package]]
@@ -1476,7 +1506,7 @@ dev = [
 requires-dist = [
     { name = "dspy", specifier = ">=3.2.1" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "predict-rlm", extras = ["gepa"], specifier = ">=0.6.1" },
+    { name = "predict-rlm", extras = ["gepa"], editable = "../predict-rlm" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
 ]
 

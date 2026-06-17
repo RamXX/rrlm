@@ -9,7 +9,7 @@
 //
 // Requires the rrlm project venv. Set RRLM_DIR to the project root (defaults to
 // the dir two levels above this file). The settled local models must be served
-// (LM Studio :1234 + supergemma :8771); override via RRLM_MAIN/RRLM_SUB.
+// (mlx_lm Q8 orchestrator :8772 + supergemma leaf :8771); override via RRLM_MAIN/RRLM_SUB.
 
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,7 +21,7 @@ import { Type } from "@sinclair/typebox";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RRLM_DIR = process.env.RRLM_DIR ?? resolve(HERE, "..", "..", "..");
-const MAIN_MODEL = process.env.RRLM_MAIN ?? "qwen3.6-27b-official-local";
+const MAIN_MODEL = process.env.RRLM_MAIN ?? "qwen3.6-27b-mlx-local";
 const SUB_MODEL = process.env.RRLM_SUB ?? "supergemma-26b-local";
 const BACKEND = process.env.RRLM_BACKEND ?? "jspi";
 

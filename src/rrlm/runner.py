@@ -132,7 +132,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-depth", type=int, default=2)
     parser.add_argument("--max-iterations", type=int, default=30)
-    parser.add_argument("--backend", default="jspi", choices=["jspi", "sbx"])
+    parser.add_argument("--backend", default="jspi", choices=["jspi", "sbx", "supervisor"])
     parser.add_argument(
         "--reasoning", default="default", choices=["default", "off", "low", "medium", "high"]
     )
@@ -144,6 +144,12 @@ def main() -> None:
         type=float,
         default=0.0,
         help="per-turn sandbox wall-clock cap; 0 = auto (3600 local, 300 hosted)",
+    )
+    parser.add_argument(
+        "--action-retries",
+        type=int,
+        default=0,
+        help="per-turn action-generation re-asks on parse failure (0 = off)",
     )
     args = parser.parse_args()
 
@@ -161,6 +167,7 @@ def main() -> None:
         sandbox_exec_timeout=args.sandbox_exec_timeout
         if args.sandbox_exec_timeout
         else (3600.0 if local else 300.0),
+        max_action_retries=args.action_retries,
     )
     result = run_task(task, args.model, args.condition, cfg)
 

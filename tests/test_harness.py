@@ -57,31 +57,29 @@ def test_build_rlm_omits_spawn_at_max_depth():
 
 
 def test_set_sandbox_exec_timeout_is_idempotent_and_applies():
-    from predict_rlm import interpreter as prlm_interp
+    import inspect
+
+    from predict_rlm.backends.jspi.backend import JspiBackend
 
     from rrlm.harness import _set_sandbox_exec_timeout
 
-    original = prlm_interp.JspiInterpreter.__init__
+    original = JspiBackend.__init__
     try:
         _set_sandbox_exec_timeout(1234.0)
-        assert prlm_interp.JspiInterpreter._rrlm_exec_timeout == 1234.0
-        patched = prlm_interp.JspiInterpreter.__init__
+        assert JspiBackend._rrlm_exec_timeout == 1234.0
+        patched = JspiBackend.__init__
         _set_sandbox_exec_timeout(1234.0)  # idempotent: no re-wrap
-        assert prlm_interp.JspiInterpreter.__init__ is patched
+        assert JspiBackend.__init__ is patched
         # the patched default is visible on the signature
-        import inspect
-
         assert (
-            inspect.signature(prlm_interp.JspiInterpreter.__init__)
-            .parameters["exec_timeout"]
-            .default
+            inspect.signature(JspiBackend.__init__).parameters["exec_timeout"].default
             == 1234.0
         )
     finally:
-        prlm_interp.JspiInterpreter.__init__ = original
+        JspiBackend.__init__ = original
         for attr in ("_rrlm_exec_timeout", "_rrlm_base_init"):
-            if hasattr(prlm_interp.JspiInterpreter, attr):
-                delattr(prlm_interp.JspiInterpreter, attr)
+            if hasattr(JspiBackend, attr):
+                delattr(JspiBackend, attr)
 
 
 def test_spawn_stats_shared_counter():

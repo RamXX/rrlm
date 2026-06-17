@@ -15,7 +15,7 @@ RUNNER_ARGS = --model $(MODEL) --sub-model $(SUB) --reasoning $(REASONING) --see
 INSTRUCTION ?= Which product id has the most negative reviews? Answer with the id only.
 DATA ?= -
 
-.PHONY: setup test smoke baseline compare report clean-runs solve pi-run
+.PHONY: setup test smoke baseline compare report clean-runs solve pi-run serve-orch serve-leaf serve-stop
 
 setup:
 	uv sync
@@ -39,6 +39,21 @@ report:
 
 clean-runs:
 	rm -rf runs/
+
+# --- Local model servers (settled config) ---
+# Orchestrator: official Qwen3.6-27B Q8 via mlx_lm (autoregressive, reliable) on :8772.
+# Leaf: supergemma-26b via DFlash on :8771. Foreground; run each in its own terminal.
+serve-orch:
+	cd $(CURDIR) && ./serve-qwen36.sh
+
+serve-leaf:
+	/Users/ramirosalas/.local/bin/dflash serve \
+		--model Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2 \
+		--draft z-lab/gemma-4-26B-A4B-it-DFlash --draft-quant w4:gs64 \
+		--host 127.0.0.1 --port 8771 --chat-template-args '{"enable_thinking": false}'
+
+serve-stop:
+	-pkill -f "serve-qwen36.sh|mlx_lm.server.*8772|dflash serve.*8771" 2>/dev/null; echo "stopped local model servers"
 
 # RLM-first solve backend (the capability Pi delegates to)
 solve:

@@ -245,6 +245,45 @@ end-to-end -- pi calls `rlm_solve`, the harness runs, the answer returns
 (json-mode `tool_execution_*` events confirm the call). The agent keeps a map of
 state in context; the data lives in the harness REPL.
 
+## Local orchestrator selection (2026-06-17): server decode matters
+
+After validating the official orchestrator path, we compared four local
+orchestrators for Qwen3.6-27B, all with the supergemma-26b leaf, jspi backend,
+reasoning off, on imdb-1000:
+
+| Orchestrator | imdb-1000 | Why |
+|---|---|---|
+| Official Q8 via **mlx_lm** (autoregressive) | **2/2** | reliable |
+| Official Q8 via **DFlash** (speculative) | 1/2 | s43 hard-fails on a DFlash decode artifact |
+| **MTPLX** (MTP-optimized server) | unreliable | ~50% parse failures + an engine spin-wedge that hangs the run |
+| Uncensored **heretic** (oQ8) | unreliable | intermittent malformed/empty turns |
+
+Key findings:
+
+- **DFlash determinism breaks RLM orchestration on edge cases.** DFlash ignores
+  client temperature (temp 0.0 == temp 2.0, byte-identical) and its
+  block-diffusion speculative decode produced a malformed turn at one specific
+  REPL state (s43 turn ~14) that *no* retry could fix on that server. The
+  **same build via mlx_lm** (standard autoregressive decode) passed the
+  identical task. So it is the server's decode path, not the model build.
+- **DFlash's speedup is marginal for this workload.** Wall-clock is dominated by
+  leaf fan-out (hundreds-to-thousands of supergemma calls), not the ~15-19
+  orchestrator turns DFlash accelerates. mlx_lm runs were comparable-or-faster.
+  Speculative decoding on the orchestrator is not worth its reliability cost
+  here.
+- **Settled production config:** official Qwen3.6-27B **Q8 via mlx_lm**
+  (`serve-qwen36.sh`, :8772) + supergemma leaf (:8771) + **jspi** backend +
+  nudge-retry. Matches the LM Studio official 4/4 (also autoregressive serving).
+- **Supervisor backend (predict-rlm 0.7 DirectPythonBackend) rejected:** it
+  deadlocked after ~11 turns and leaked subprocesses. Use jspi/sbx.
+- **Action-generation retry (local predict-rlm branch, not upstreamed):** the
+  retry must change the *prompt* (a nudge naming the parse failure), not just
+  sampling -- deterministic backends ignore temperature, so plain re-ask and
+  temperature escalation are no-ops there. The nudge altered the prompt but
+  could not rescue the DFlash s43 turn (the model was genuinely stuck at that
+  state); switching the server fixed it. The retry remains sound general
+  insurance for stochastic backends.
+
 ## Open items / caveats
 
 - n=1-2 per cell, single model, synthetic template data.

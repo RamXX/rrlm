@@ -108,26 +108,27 @@ def build_lm(
 
 
 def _set_sandbox_exec_timeout(seconds: float) -> None:
-    """Raise the JspiInterpreter per-turn exec timeout (default 300s).
+    """Raise the JSPI backend per-turn exec timeout (default 300s).
 
-    PredictRLM exposes no pass-through for it, so patch the constructor default.
-    A wide local fan-out runs as one REPL turn over serial leaves and otherwise
-    trips the 300s cap mid-gather. Idempotent.
+    PredictRLM exposes no pass-through for the jspi exec_timeout, so patch the
+    constructor default. A wide local fan-out runs as one REPL turn over serial
+    leaves and otherwise trips the 300s cap mid-gather. Idempotent.
+
+    predict-rlm 0.7 renamed the class JspiInterpreter -> JspiBackend and moved it
+    to backends.jspi.backend.
     """
-    from predict_rlm import interpreter as prlm_interp
+    from predict_rlm.backends.jspi.backend import JspiBackend
 
-    if getattr(prlm_interp.JspiInterpreter, "_rrlm_exec_timeout", None) == seconds:
+    if getattr(JspiBackend, "_rrlm_exec_timeout", None) == seconds:
         return
-    base_init = getattr(
-        prlm_interp.JspiInterpreter, "_rrlm_base_init", prlm_interp.JspiInterpreter.__init__
-    )
+    base_init = getattr(JspiBackend, "_rrlm_base_init", JspiBackend.__init__)
 
     def patched_init(self, *args, exec_timeout=seconds, **kwargs):
         base_init(self, *args, exec_timeout=exec_timeout, **kwargs)
 
-    prlm_interp.JspiInterpreter._rrlm_base_init = base_init
-    prlm_interp.JspiInterpreter.__init__ = patched_init
-    prlm_interp.JspiInterpreter._rrlm_exec_timeout = seconds
+    JspiBackend._rrlm_base_init = base_init
+    JspiBackend.__init__ = patched_init
+    JspiBackend._rrlm_exec_timeout = seconds
 
 
 def build_rlm(
@@ -144,30 +145,39 @@ def build_rlm(
     in their .history. `spawn_stats` counts rlm_spawn invocations per depth.
     """
     spawn_stats = spawn_stats if spawn_stats is not None else Counter()
-    sbx_config = None
-    if cfg.backend == "jspi":
-        if cfg.sandbox_exec_timeout != 300.0:
-            _set_sandbox_exec_timeout(cfg.sandbox_exec_timeout)
-    elif cfg.backend == "sbx":
-        # Docker sandbox has its own exec cap; raise it for slow local leaves.
-        from predict_rlm import SbxConfig
-
-        sbx_config = SbxConfig(exec_timeout=cfg.sandbox_exec_timeout)
     tools = []
     if depth < cfg.max_depth:
         tools.append(_make_rlm_spawn(cfg, main_lm, sub_lm, depth, spawn_stats))
 
-    rlm = PredictRLM(
-        RlmTask,
+    # Backend selection. "supervisor" (0.7) runs real local CPython with no
+    # Deno/WASM bridge -- fastest for wide local fan-out and no JSPI hang -- and
+    # is passed as interpreter= (mutually exclusive with sandbox_backend).
+    rlm_kwargs: dict = dict(
         lm=main_lm,
         sub_lm=sub_lm,
         skills=[doctrine_skill()],
         tools=tools,
         max_iterations=cfg.max_iterations,
         max_llm_calls=cfg.max_llm_calls,
-        sandbox_backend=cfg.backend,
-        sbx_config=sbx_config,
+        max_action_generation_retries=cfg.max_action_retries,
     )
+    if cfg.backend == "supervisor":
+        from predict_rlm import DirectPythonBackend
+
+        rlm_kwargs["interpreter"] = DirectPythonBackend(
+            exec_timeout=cfg.sandbox_exec_timeout
+        )
+    elif cfg.backend == "sbx":
+        from predict_rlm import SbxConfig
+
+        rlm_kwargs["sandbox_backend"] = "sbx"
+        rlm_kwargs["sbx_config"] = SbxConfig(exec_timeout=cfg.sandbox_exec_timeout)
+    else:  # jspi
+        if cfg.sandbox_exec_timeout != 300.0:
+            _set_sandbox_exec_timeout(cfg.sandbox_exec_timeout)
+        rlm_kwargs["sandbox_backend"] = "jspi"
+
+    rlm = PredictRLM(RlmTask, **rlm_kwargs)
     rlm.spawn_stats = spawn_stats  # surfaced in the run result
     return rlm
 

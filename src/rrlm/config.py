@@ -93,6 +93,36 @@ MODELS: dict[str, ModelSpec] = {
         supports_response_schema=True,  # LM Studio needs json_schema, not json_object
         notes="official Qwen3.6-27B via LM Studio; orchestrator-fidelity control",
     ),
+    "mtp-27b-local": ModelSpec(
+        slug="mtplx-qwen36-27b-optimized-quality",
+        context_length=262_100,
+        max_output_tokens=65_536,
+        context_is_total=True,
+        provider_prefix="openai",
+        api_base="http://127.0.0.1:8000/v1",  # MTP qwen3.6-27b server
+        notes="MTP-optimized Qwen3.6-27B (:8000); reasoning model, thinking not "
+        "cleanly disablable; accepts json_object so no schema flag needed",
+    ),
+    "qwen3.6-27b-dflash-local": ModelSpec(
+        slug="mlx-community/Qwen3.6-27B-8bit",
+        context_length=262_100,
+        max_output_tokens=65_536,
+        context_is_total=True,
+        provider_prefix="openai",
+        api_base="http://127.0.0.1:8770/v1",  # dflash-qwen36.sh serve (DFlash + Q8)
+        notes="official Qwen3.6-27B Q8 MLX via DFlash speculative decoding; "
+        "reliable+fast orchestrator (replaces uncensored heretic and MTPLX)",
+    ),
+    "qwen3.6-27b-mlx-local": ModelSpec(
+        slug="mlx-community/Qwen3.6-27B-8bit",
+        context_length=262_100,
+        max_output_tokens=65_536,
+        context_is_total=True,
+        provider_prefix="openai",
+        api_base="http://127.0.0.1:8772/v1",  # serve-qwen36.sh (mlx_lm, stochastic)
+        notes="official Qwen3.6-27B Q8 via mlx_lm.server (stochastic sampling); "
+        "isolation test vs DFlash determinism",
+    ),
     "supergemma-26b-local": ModelSpec(
         slug="Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2",
         context_length=262_100,
@@ -117,12 +147,15 @@ class HarnessConfig:
     main_max_tokens: int = 16_384  # per-turn output cap for the orchestrator
     sub_max_tokens: int = 8_192  # per-call output cap for predict()
     temperature: float = 0.2
-    backend: str = "jspi"  # predict-rlm sandbox backend: "jspi" | "sbx" (Docker)
+    backend: str = "jspi"  # "jspi" (Deno/WASM) | "sbx" (Docker) | "supervisor" (real local CPython)
     reasoning: str = "default"  # OpenRouter reasoning: default | off | low | medium | high
     # Per-REPL-turn sandbox wall-clock cap. predict-rlm defaults to 300s, which
     # assumes cloud-speed concurrent leaves; local serial leaves need a wide
     # fan-out to fit, so the runner raises this for local endpoints.
     sandbox_exec_timeout: float = 300.0
+    # Per-turn action-generation re-asks on a parse/validation failure (0.7+).
+    # Absorbs intermittent malformed/empty turns that otherwise abort the run.
+    max_action_retries: int = 0
 
     def as_dict(self) -> dict:
         return asdict(self)

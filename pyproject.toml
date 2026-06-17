@@ -24,3 +24,6 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "respx>=0.23.1",
 ]
+
+[tool.uv.sources]
+predict-rlm = { path = "../predict-rlm", editable = true }
