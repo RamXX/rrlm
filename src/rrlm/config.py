@@ -106,6 +106,9 @@ MODELS: dict[str, ModelSpec] = {
         notes="Qwen3.6-27B fine-tuned via the Pi agent harness for no-thinking "
         "agentic coding; GGUF via llama-server. Settled orchestrator (2/2, cleanest turns).",
     ),
+    # (pi-tune Q4_K_M tested and rejected: passed 2/2 but sloppier -- more REPL
+    # exec-error churn -- and NOT faster on Metal, ~8.87 vs Q6's 9.18 tok/s, for
+    # only 5GB less. Q6_K wins. GGUF deleted; see FINDINGS.md.)
     "supergemma-26b-local": ModelSpec(
         slug="Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2",
         context_length=262_100,

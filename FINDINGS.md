@@ -284,6 +284,43 @@ Key findings:
   state); switching the server fixed it. The retry remains sound general
   insurance for stochastic backends.
 
+## Final orchestrator: pi-tune Q6_K (2026-06-17)
+
+A Pi-harness-tuned Qwen3.6-27B (`bytkim/Qwen3.6-27B-MTP-pi-tune`, no-thinking
+native, trained on real agent traces) replaced the base-Qwen orchestrators.
+Served as Q6_K GGUF via llama-server (plain autoregressive), temp 0.7.
+
+| Orchestrator (+ supergemma leaf, jspi) | imdb-1000 | action turns | notes |
+|---|---|---|---|
+| base Qwen Q8 / mxfp8 (mlx_lm) | 2/2 | 12-19 | needed retry/server-swap insurance |
+| base Qwen DFlash | 1/2 | 14 | s43 unrecoverable (deterministic decode) |
+| **pi-tune Q6_K (llama.cpp)** | **2/2** | **6-7** | clean turns, zero malformed, zero retries |
+| pi-tune Q4_K_M | 2/2 | 7-10 | passed but sloppier (more exec-error churn); see below |
+
+Decisions, with receipts:
+
+- **pi-tune wins the orchestrator role.** It emits clean, well-formed action
+  turns and solves in ~half the turns of base Qwen, eliminating the malformed-
+  turn failures that drove the retry/server-swap work. Purpose-built (Pi-harness
+  SFT, no-thinking).
+- **MTP self-speculation rejected.** llama.cpp build 9670 has `--spec-type
+  draft-mtp` (PR #22673). It loads and keeps quality (2/2), but on Apple Silicon
+  it is **~33% slower** (6.09 vs 9.18 tok/s decode at 60% draft acceptance) --
+  the draft+verify overhead exceeds the speculative savings on a bandwidth-bound
+  Mac. Kept as an off-by-default `SPEC_MTP` toggle in `serve-pitune.sh`.
+- **Q6_K beats Q4_K_M.** Q4 passed 2/2 but was sloppier (more REPL exec-error
+  churn: 3/7 and 5/10 steps vs Q6's ~1-2/6) and **not faster** (8.87 vs 9.18
+  tok/s -- bandwidth-bound; the smaller quant's dequant cost cancels the size
+  benefit), saving only ~5GB. Q6_K is the settled quant; Q4 GGUF deleted.
+- **General lesson (reaffirmed):** for this leaf-fan-out-dominated workload,
+  orchestrator decode speed barely moves wall-clock; orchestrator *reliability*
+  (clean turns) is what matters. Speculative tricks (DFlash, MTP) and smaller
+  quants traded reliability/cleanliness for speed that the workload can't use.
+
+Settled local config: `bytkim/Qwen3.6-27B-MTP-pi-tune` **Q6_K** via
+`serve-pitune.sh` (llama-server :8773, no-thinking, temp 0.7) + supergemma-26b
+leaf (DFlash :8771) + **jspi** backend + nudge-retry insurance.
+
 ## Open items / caveats
 
 - n=1-2 per cell, single model, synthetic template data.
