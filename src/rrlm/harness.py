@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import inspect
 from collections import Counter
 
 import dspy
 from predict_rlm import PredictRLM
 
-from rrlm.config import MODELS, HarnessConfig
+from rrlm.config import HarnessConfig
+from rrlm.pi_config import ResolvedModel
 from rrlm.playbooks import doctrine_skill
+
+# Constructor params of the installed predict-rlm, computed once. Used to
+# feature-detect optional kwargs (e.g. max_action_generation_retries, which only
+# exists in patched builds) so rrlm runs against stock predict-rlm from PyPI.
+_PREDICT_RLM_PARAMS = set(inspect.signature(PredictRLM.__init__).parameters)
 
 
 class SharedLM(dspy.LM):
@@ -44,42 +51,39 @@ class BaselineTask(dspy.Signature):
 
 
 def build_lm(
-    model_key: str,
-    api_key: str,
+    model: ResolvedModel,
     max_tokens: int,
     temperature: float,
     reasoning: str = "default",
 ) -> dspy.LM:
-    spec = MODELS[model_key]
-    if max_tokens > spec.max_output_tokens:
+    """Build a dspy.LM from a Pi-resolved model (see ``rrlm.pi_config``)."""
+    if max_tokens > model.max_tokens:
         raise ValueError(
-            f"max_tokens {max_tokens} exceeds {model_key} limit {spec.max_output_tokens}"
+            f"max_tokens {max_tokens} exceeds {model.ref} limit {model.max_tokens}"
         )
 
-    if spec.supports_response_schema:
+    if model.needs_json_schema:
         # make DSPy/litellm emit response_format json_schema (LM Studio-compatible)
         # instead of json_object, which LM Studio's OpenAI endpoint rejects.
         import litellm
 
-        litellm.register_model({spec.litellm_id: {"supports_response_schema": True}})
-
-    extra_body: dict = {}
-    if spec.provider_order:
-        extra_body["provider"] = {
-            "order": list(spec.provider_order),
-            "allow_fallbacks": False,
-        }
+        litellm.register_model({model.litellm_id: {"supports_response_schema": True}})
 
     if reasoning not in ("default", "off", "low", "medium", "high"):
         raise ValueError(f"unknown reasoning setting: {reasoning}")
-    if spec.is_openrouter:
+
+    extra_body: dict = {}
+    if model.reasoning_style == "openrouter":
+        if model.openrouter_routing:
+            extra_body["provider"] = model.openrouter_routing
         if reasoning == "off":
             extra_body["reasoning"] = {"enabled": False}
         elif reasoning in ("low", "medium", "high"):
             extra_body["reasoning"] = {"effort": reasoning}
-    else:
-        # local mlx_lm/vllm: thinking is a chat-template kwarg. effort levels
-        # collapse to on/off since the template only exposes a boolean.
+    elif model.reasoning_style == "chat_template":
+        # local mlx_lm/vllm/llama.cpp and openai-compatible chat servers: thinking
+        # is a chat-template kwarg. effort levels collapse to on/off since the
+        # template only exposes a boolean. "default" sends nothing.
         if reasoning == "off":
             extra_body["chat_template_kwargs"] = {"enable_thinking": False}
         elif reasoning in ("low", "medium", "high"):
@@ -88,8 +92,9 @@ def build_lm(
     kwargs: dict = {}
     if extra_body:
         kwargs["extra_body"] = extra_body
-    if spec.api_base:  # local endpoint (ollama/vllm); key is usually a placeholder
-        kwargs["api_base"] = spec.api_base
+    if model.api_base:  # openai-compatible endpoint (local/proxy); key may be a placeholder
+        kwargs["api_base"] = model.api_base
+    if model.is_local:
         # local generation is far slower than hosted; the 600s litellm default
         # turns one slow turn into a 4x-retried multi-hour stall. Give locals
         # room and do not retry a timeout (it will just time out again).
@@ -98,11 +103,11 @@ def build_lm(
     else:
         kwargs["num_retries"] = 3
     return SharedLM(
-        spec.litellm_id,
-        api_key=api_key,
+        model.litellm_id,
+        api_key=model.api_key,
         max_tokens=max_tokens,
         temperature=temperature,
-        cache=False,  # experiments must measure real calls, never cache hits
+        cache=False,  # measure real calls, never cache hits
         **kwargs,
     )
 
@@ -159,8 +164,11 @@ def build_rlm(
         tools=tools,
         max_iterations=cfg.max_iterations,
         max_llm_calls=cfg.max_llm_calls,
-        max_action_generation_retries=cfg.max_action_retries,
     )
+    # Stock predict-rlm (PyPI) has no per-turn action retry; only pass it when the
+    # installed build supports it (e.g. a patched/forked predict-rlm).
+    if "max_action_generation_retries" in _PREDICT_RLM_PARAMS:
+        rlm_kwargs["max_action_generation_retries"] = cfg.max_action_retries
     if cfg.backend == "supervisor":
         from predict_rlm import DirectPythonBackend
 

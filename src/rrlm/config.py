@@ -1,4 +1,8 @@
-"""Experiment configuration: model registry, harness budgets, paths."""
+"""Harness budgets, paths, and environment loading.
+
+Model configuration is no longer a registry here -- it is resolved from Pi's own
+config (see ``rrlm.pi_config``), so rrlm runs whatever models Pi provides.
+"""
 
 from __future__ import annotations
 
@@ -15,132 +19,25 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 @dataclass(frozen=True)
-class ModelSpec:
-    """An OpenRouter model under test."""
-
-    slug: str  # OpenRouter slug, e.g. "qwen/qwen3.7-max"
-    context_length: int  # advertised; see context_is_total
-    max_output_tokens: int  # hard model limit
-    provider_order: tuple[str, ...] | None = None  # pin OpenRouter providers
-    context_is_total: bool = False  # True when context_length covers in+out combined
-    provider_prefix: str = "openrouter"  # litellm provider, e.g. "openai" for local vllm
-    api_base: str | None = None  # set for local endpoints (ollama/vllm); skips reconcile
-    # LM Studio rejects response_format json_object but accepts json_schema; set
-    # this so DSPy emits json_schema (via litellm) instead of json_object.
-    supports_response_schema: bool = False
-    # Per-model recommended sampling/thinking (used when not overridden on the
-    # CLI). e.g. the pi-tune model is no-thinking native (reasoning="default")
-    # and tuned for temperature 0.7; the mlx base models want reasoning="off".
-    default_reasoning: str = "off"
-    default_temperature: float = 0.2
-    notes: str = ""
-
-    @property
-    def litellm_id(self) -> str:
-        return f"{self.provider_prefix}/{self.slug}"
-
-    @property
-    def is_openrouter(self) -> bool:
-        return self.provider_prefix == "openrouter"
-
-
-MODELS: dict[str, ModelSpec] = {
-    "qwen3.7-max": ModelSpec(
-        slug="qwen/qwen3.7-max",
-        context_length=1_000_000,
-        max_output_tokens=65_536,
-        notes="$1.25/M in, $3.75/M out (2026-06); thinking model",
-    ),
-    "qwen3.7-plus": ModelSpec(
-        slug="qwen/qwen3.7-plus",
-        context_length=1_000_000,
-        max_output_tokens=65_536,
-        notes="$0.32/M in, $1.28/M out (2026-06); thinking model",
-    ),
-    "gemma-4-26b": ModelSpec(
-        slug="google/gemma-4-26b-a4b-it",
-        context_length=262_100,
-        max_output_tokens=32_768,
-        provider_order=("cloudflare", "siliconflow"),
-        context_is_total=True,  # 262.1K covers input+output combined
-        notes="locally runnable class; low-context arm of the hypothesis",
-    ),
-    "qwen3.6-27b": ModelSpec(
-        slug="qwen/qwen3.6-27b",
-        context_length=262_100,
-        max_output_tokens=65_536,
-        provider_order=("chutes", "deepinfra"),
-        context_is_total=True,
-        notes="locally runnable class; low-context arm of the hypothesis",
-    ),
-    # Local DFlash/MLX servers (see ~/workspace/serve-models.sh). Uncensored
-    # variants of the same architectures as qwen3.6-27b / gemma-4-26b, served
-    # via mlx_lm.server. Slug must equal the server's --model value: mlx_lm
-    # loads the model named in each request. Reasoning toggled locally through
-    # chat_template_kwargs.enable_thinking, not the OpenRouter reasoning field.
-    "heretic-27b-local": ModelSpec(
-        slug="/Users/ramirosalas/.lmstudio/models/bi0h4z4rd88/"
-        "Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-oQ8-mtp",
-        context_length=262_100,
-        max_output_tokens=65_536,
-        context_is_total=True,
-        provider_prefix="openai",
-        api_base="http://127.0.0.1:8770/v1",
-        notes="local Qwen3.6-27B uncensored (heretic) via mlx_lm.server :8770",
-    ),
-    # Settled orchestrator (won the local bake-off): Qwen3.6-27B fine-tuned via
-    # the Pi agent harness for no-thinking agentic coding. Served as Q6_K GGUF
-    # by llama-server (serve-pitune.sh, plain autoregressive -- MTP self-spec was
-    # net-slower on Apple Silicon). No-thinking native; tuned for temp 0.7.
-    # (Superseded local entries -- LM Studio official, MTPLX, DFlash Q8, mxfp8,
-    # mlx int8 -- were removed after their models were deleted; see git history.)
-    "qwen3.6-27b-pitune-local": ModelSpec(
-        slug="Qwen3.6-27B-MTP-pi-tune",  # llama-server serves the one loaded GGUF; id is nominal
-        context_length=262_100,
-        max_output_tokens=65_536,
-        context_is_total=True,
-        provider_prefix="openai",
-        api_base="http://127.0.0.1:8773/v1",  # serve-pitune.sh (llama-server, Q6_K GGUF)
-        default_reasoning="default",  # no-thinking native; do not send enable_thinking
-        default_temperature=0.7,  # card-recommended sampling
-        notes="Qwen3.6-27B fine-tuned via the Pi agent harness for no-thinking "
-        "agentic coding; GGUF via llama-server. Settled orchestrator (2/2, cleanest turns).",
-    ),
-    # (pi-tune Q4_K_M tested and rejected: passed 2/2 but sloppier -- more REPL
-    # exec-error churn -- and NOT faster on Metal, ~8.87 vs Q6's 9.18 tok/s, for
-    # only 5GB less. Q6_K wins. GGUF deleted; see FINDINGS.md.)
-    "supergemma-26b-local": ModelSpec(
-        slug="Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2",
-        context_length=262_100,
-        max_output_tokens=32_768,
-        context_is_total=True,
-        provider_prefix="openai",
-        api_base="http://127.0.0.1:8771/v1",
-        notes="local gemma-4-26b uncensored (supergemma) via mlx_lm.server :8771",
-    ),
-}
-
-
-@dataclass(frozen=True)
 class HarnessConfig:
-    """Budgets and knobs for one experimental condition."""
+    """Budgets and knobs for one run. Model identity lives in ResolvedModel."""
 
-    main_model: str = "qwen3.7-max"
-    sub_model: str = "qwen3.7-max"
+    main_model: str = ""  # reference string, for logging/run-id only
+    sub_model: str = ""
     max_depth: int = 2  # rlm_spawn recursion budget (0 = no recursion)
     max_iterations: int = 30  # REPL turns per agent
     max_llm_calls: int = 50  # sub-LM call budget per agent
     main_max_tokens: int = 16_384  # per-turn output cap for the orchestrator
     sub_max_tokens: int = 8_192  # per-call output cap for predict()
     temperature: float = 0.2
-    backend: str = "jspi"  # "jspi" (Deno/WASM) | "sbx" (Docker) | "supervisor" (real local CPython)
-    reasoning: str = "default"  # OpenRouter reasoning: default | off | low | medium | high
+    backend: str = "jspi"  # "jspi" (Deno/WASM) | "sbx" (Docker) | "supervisor" (local CPython)
+    reasoning: str = "default"  # default | off | low | medium | high
     # Per-REPL-turn sandbox wall-clock cap. predict-rlm defaults to 300s, which
     # assumes cloud-speed concurrent leaves; local serial leaves need a wide
-    # fan-out to fit, so the runner raises this for local endpoints.
+    # fan-out to fit, so callers raise this for local endpoints.
     sandbox_exec_timeout: float = 300.0
-    # Per-turn action-generation re-asks on a parse/validation failure (0.7+).
-    # Absorbs intermittent malformed/empty turns that otherwise abort the run.
+    # Per-turn action-generation re-asks on a parse/validation failure. Only
+    # applied when the installed predict-rlm supports it (feature-detected).
     max_action_retries: int = 0
 
     def as_dict(self) -> dict:
@@ -148,12 +45,11 @@ class HarnessConfig:
 
 
 def load_env() -> str:
-    """Load .env and return the OpenRouter API key, failing loudly if absent."""
+    """Load ``.env`` and return the OpenRouter key (may be empty).
+
+    The OpenRouter key is only needed for the optional no-Pi path and for cost
+    reconciliation against OpenRouter's generation endpoint. Model credentials
+    themselves come from Pi config, so absence is not fatal.
+    """
     load_dotenv(PROJECT_ROOT / ".env")
-    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError(
-            "OPENROUTER_API_KEY is not set. Create a .env file at the project root "
-            "(see .env.example)."
-        )
-    return key
+    return os.environ.get("OPENROUTER_API_KEY", "").strip()

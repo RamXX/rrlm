@@ -1,13 +1,17 @@
 """Run one task under one condition and record comparable metrics.
 
 Usage:
-    python -m rrlm.runner --task ledger --model qwen3.7-max --condition rlm --size 2000
+    python -m rrlm.bench.runner --task ledger --model openrouter/qwen/qwen3.7-max \
+        --condition rlm --size 2000
+
+Models are Pi model references (provider/model or a bare id; see rrlm.pi_config).
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import datetime as dt
 import importlib.metadata
 import json
@@ -16,10 +20,15 @@ import traceback
 
 import dspy
 
-from rrlm.config import MODELS, RUNS_DIR, HarnessConfig, load_env
+from rrlm.bench.tasks import TASK_BUILDERS, Task
+from rrlm.config import RUNS_DIR, HarnessConfig, load_env
 from rrlm.harness import BaselineTask, build_lm, build_rlm
 from rrlm.metrics import RunLogger, harvest_lm_history, reconcile, summarize
-from rrlm.tasks import TASK_BUILDERS, Task
+from rrlm.pi_config import ResolvedModel, resolve_model
+
+
+def _redacted(model: ResolvedModel) -> dict:
+    return {**dataclasses.asdict(model), "api_key": "<redacted>"}
 
 
 def _versions() -> dict:
@@ -32,22 +41,25 @@ def _versions() -> dict:
     return out
 
 
-def run_task(task: Task, model_key: str, condition: str, cfg: HarnessConfig) -> dict:
-    api_key = load_env()
+def run_task(
+    task: Task, main: ResolvedModel, sub: ResolvedModel, condition: str, cfg: HarnessConfig
+) -> dict:
+    api_key = load_env()  # OpenRouter key for cost reconciliation (may be empty)
     started_at = dt.datetime.now(dt.timezone.utc)
     variant = condition
     if cfg.reasoning != "default":
         variant += f"-r{cfg.reasoning}"
-    if cfg.sub_model != model_key:
-        variant += f"-sub:{cfg.sub_model}"
-    run_id = f"{started_at.strftime('%Y%m%d-%H%M%S')}_{task.task_id}_{model_key}_{variant}"
+    if sub.ref != main.ref:
+        variant += f"-sub:{sub.ref}"
+    safe_model = main.ref.replace("/", "-")
+    run_id = f"{started_at.strftime('%Y%m%d-%H%M%S')}_{task.task_id}_{safe_model}_{variant}"
     logger = RunLogger(RUNS_DIR, run_id)
 
     main_lm = build_lm(
-        model_key, api_key, cfg.main_max_tokens, cfg.temperature, reasoning=cfg.reasoning
+        main, min(cfg.main_max_tokens, main.max_tokens), cfg.temperature, reasoning=cfg.reasoning
     )
     sub_lm = build_lm(
-        cfg.sub_model, api_key, cfg.sub_max_tokens, cfg.temperature, reasoning=cfg.reasoning
+        sub, min(cfg.sub_max_tokens, sub.max_tokens), cfg.temperature, reasoning=cfg.reasoning
     )
     main_start, sub_start = len(main_lm.history), len(sub_lm.history)
 
@@ -58,8 +70,8 @@ def run_task(task: Task, model_key: str, condition: str, cfg: HarnessConfig) -> 
             "task_id": task.task_id,
             "task_kind": task.kind,
             "task_meta": task.meta,
-            "model": model_key,
-            "model_spec": MODELS[model_key].__dict__,
+            "model": main.ref,
+            "model_spec": {"main": _redacted(main), "sub": _redacted(sub)},
             "condition": condition,
             "harness": cfg.as_dict(),
             "versions": _versions(),
@@ -126,7 +138,10 @@ def run_task(task: Task, model_key: str, condition: str, cfg: HarnessConfig) -> 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run one rrlm experiment condition")
     parser.add_argument("--task", default="ledger", choices=sorted(TASK_BUILDERS))
-    parser.add_argument("--model", default="qwen3.7-max", choices=sorted(MODELS))
+    parser.add_argument(
+        "--model", default=None,
+        help="orchestrator model (Pi 'provider/model' or bare id); default: Pi's current model",
+    )
     parser.add_argument("--condition", default="rlm", choices=["rlm", "baseline"])
     parser.add_argument("--size", type=int, default=2000, help="task size (e.g. ledger lines)")
     parser.add_argument("--seed", type=int, default=42)
@@ -137,7 +152,7 @@ def main() -> None:
         "--reasoning", default="default", choices=["default", "off", "low", "medium", "high"]
     )
     parser.add_argument(
-        "--sub-model", default=None, choices=sorted(MODELS), help="sub-LM for predict()"
+        "--sub-model", default=None, help="sub-LM for predict() (Pi 'provider/model' or bare id)"
     )
     parser.add_argument(
         "--sandbox-exec-timeout",
@@ -159,13 +174,16 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    load_env()  # load .env so OPENROUTER_API_KEY is visible to model resolution
     task = TASK_BUILDERS[args.task](size=args.size, seed=args.seed)
     # local endpoints serve leaves serially; a wide fan-out runs as one REPL turn
     # and overruns the 300s sandbox cap, so give local runs a generous window.
-    local = MODELS[args.model].api_base is not None or MODELS[args.sub_model or args.model].api_base is not None
+    main = resolve_model(args.model)
+    sub = resolve_model(args.sub_model) if args.sub_model else main
+    local = main.is_local or sub.is_local
     cfg = HarnessConfig(
-        main_model=args.model,
-        sub_model=args.sub_model or args.model,
+        main_model=main.ref,
+        sub_model=sub.ref,
         max_depth=args.max_depth,
         max_iterations=args.max_iterations,
         backend=args.backend,
@@ -176,7 +194,7 @@ def main() -> None:
         max_action_retries=args.action_retries,
         **({"temperature": args.temperature} if args.temperature is not None else {}),
     )
-    result = run_task(task, args.model, args.condition, cfg)
+    result = run_task(task, main, sub, args.condition, cfg)
 
     usage = result["usage"]
     print(json.dumps(result, indent=2, default=str))

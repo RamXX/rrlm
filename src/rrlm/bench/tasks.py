@@ -362,7 +362,7 @@ def make_imdb_task(size: int = 1000, seed: int = 42, cache_path=None) -> Task:
     """Real-text semantic aggregation: genuine IMDB reviews (true labels as
     ground truth), product ids assigned with a planted negative-rate skew.
     Human text resists template induction, so per-item judgment is semantic."""
-    from rrlm.corpora import IMDB_CACHE, fetch_imdb_pool
+    from rrlm.bench.corpora import IMDB_CACHE, fetch_imdb_pool
 
     pool = fetch_imdb_pool(cache_path or IMDB_CACHE)
     rng = random.Random(seed)

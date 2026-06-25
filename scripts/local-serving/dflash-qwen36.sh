@@ -30,7 +30,8 @@ DRAFT="${DRAFT:-z-lab/Qwen3.6-27B-DFlash}"
 # Clients can still override per request via chat_template_kwargs.
 NOTHINK_ARGS=(--chat-template-args '{"enable_thinking": false}')
 
-DFLASH=/Users/ramirosalas/.local/bin/dflash
+# dflash resolved from PATH; override with $DFLASH if installed elsewhere.
+DFLASH="${DFLASH:-dflash}"
 cmd="${1:-bench}"
 
 case "$cmd" in

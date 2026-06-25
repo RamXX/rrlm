@@ -1,6 +1,6 @@
 """Unit tests for synthetic task generation and checking."""
 
-from rrlm.tasks import (
+from rrlm.bench.tasks import (
     make_bugfind_task,
     make_ledger_task,
     make_needle_task,
@@ -57,7 +57,7 @@ def test_ledger_checker_rejects_wrong_answer():
 def test_needle_has_exactly_one_relocation_for_target():
     task = make_needle_task(size=1000, seed=5)
     person, city = task.meta["target_person"], task.meta["target_city"]
-    target_city_lines = [l for l in task.data.splitlines() if city in l]
+    target_city_lines = [line for line in task.data.splitlines() if city in line]
     # the target city appears ONLY in the needle sentence
     assert len(target_city_lines) == 1
     assert person in target_city_lines[0]
@@ -113,7 +113,7 @@ def _fake_imdb_cache(tmp_path):
 
 
 def test_imdb_task_deterministic_and_strict_max(tmp_path):
-    from rrlm.tasks import make_imdb_task
+    from rrlm.bench.tasks import make_imdb_task
 
     cache = _fake_imdb_cache(tmp_path)
     a = make_imdb_task(size=300, seed=6, cache_path=cache)
@@ -127,7 +127,7 @@ def test_imdb_task_deterministic_and_strict_max(tmp_path):
 
 
 def test_imdb_lines_are_single_line(tmp_path):
-    from rrlm.tasks import make_imdb_task
+    from rrlm.bench.tasks import make_imdb_task
 
     task = make_imdb_task(size=120, seed=2, cache_path=_fake_imdb_cache(tmp_path))
     for line in task.data.splitlines():

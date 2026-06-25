@@ -6,13 +6,26 @@ import pytest
 
 from rrlm.config import HarnessConfig
 from rrlm.harness import build_lm, build_rlm
+from rrlm.pi_config import ResolvedModel
+
+
+def _model(max_tokens: int = 65_536, **kw) -> ResolvedModel:
+    return ResolvedModel(
+        ref="test/model",
+        provider="openrouter",
+        model_id="test/model",
+        litellm_id="openrouter/test/model",
+        api_key="sk-or-test",
+        max_tokens=max_tokens,
+        reasoning_style="openrouter",
+        **kw,
+    )
 
 
 def _lms():
-    key = "sk-or-test"
     cfg = HarnessConfig()
-    main = build_lm(cfg.main_model, key, cfg.main_max_tokens, cfg.temperature)
-    sub = build_lm(cfg.sub_model, key, cfg.sub_max_tokens, cfg.temperature)
+    main = build_lm(_model(), cfg.main_max_tokens, cfg.temperature)
+    sub = build_lm(_model(), cfg.sub_max_tokens, cfg.temperature)
     return cfg, main, sub
 
 
@@ -30,7 +43,7 @@ def test_shared_lm_copy_with_overrides_is_new_instance():
 
 def test_build_lm_rejects_excess_max_tokens():
     with pytest.raises(ValueError, match="exceeds"):
-        build_lm("qwen3.7-max", "k", 100_000, 0.2)
+        build_lm(_model(max_tokens=65_536), 100_000, 0.2)
 
 
 def test_build_lm_disables_cache():

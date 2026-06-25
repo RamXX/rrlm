@@ -18,18 +18,22 @@
 # Ollama (11434), and the usual 8000/8080.
 set -euo pipefail
 
-DFLASH=/Users/ramirosalas/.local/bin/dflash
-RUN=/tmp/llm-servers
+# dflash resolved from PATH; override with $DFLASH if installed elsewhere.
+DFLASH="${DFLASH:-dflash}"
+RUN="${RUN:-/tmp/llm-servers}"
 mkdir -p "$RUN"
 
-# name | port | target (HF repo id or local path) | DFlash draft
-HERETIC_MODEL="/Users/ramirosalas/.lmstudio/models/bi0h4z4rd88/Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-oQ8-mtp"
-HERETIC_DRAFT="z-lab/Qwen3.6-27B-DFlash"
-HERETIC_PORT=8770
+# name | port | target (HF repo id or local path) | DFlash draft. All env-overridable.
+# heretic is an OPTIONAL legacy orchestrator (a local uncensored build); leave
+# HERETIC_MODEL empty to skip it. The supergemma leaf is the settled config and
+# downloads from a public HF repo, so it works out of the box.
+HERETIC_MODEL="${HERETIC_MODEL:-}"
+HERETIC_DRAFT="${HERETIC_DRAFT:-z-lab/Qwen3.6-27B-DFlash}"
+HERETIC_PORT="${HERETIC_PORT:-8770}"
 
-SG_MODEL="Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2"
-SG_DRAFT="z-lab/gemma-4-26B-A4B-it-DFlash"
-SG_PORT=8771
+SG_MODEL="${SG_MODEL:-Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2}"
+SG_DRAFT="${SG_DRAFT:-z-lab/gemma-4-26B-A4B-it-DFlash}"
+SG_PORT="${SG_PORT:-8771}"
 
 HOST=127.0.0.1
 
@@ -86,10 +90,14 @@ done
 
 case "$cmd" in
   start)
-    _start_one heretic    "$HERETIC_PORT" "$HERETIC_MODEL" "$HERETIC_DRAFT" "$NOTHINK_HERETIC"
-    _start_one supergemma "$SG_PORT"      "$SG_MODEL"      "$SG_DRAFT"      "$NOTHINK_SG"
-    echo "Both launching. Models load lazily; check './serve-models.sh status' in ~30-60s."
-    echo "  heretic:    http://$HOST:$HERETIC_PORT/v1"
+    if [ -n "$HERETIC_MODEL" ]; then
+      _start_one heretic "$HERETIC_PORT" "$HERETIC_MODEL" "$HERETIC_DRAFT" "$NOTHINK_HERETIC"
+      echo "  heretic:    http://$HOST:$HERETIC_PORT/v1"
+    else
+      echo "[heretic] skipped (set HERETIC_MODEL to enable the optional orchestrator)"
+    fi
+    _start_one supergemma "$SG_PORT" "$SG_MODEL" "$SG_DRAFT" "$NOTHINK_SG"
+    echo "Models load lazily; check './serve-models.sh status' in ~30-60s."
     echo "  supergemma: http://$HOST:$SG_PORT/v1"
     ;;
   stop)

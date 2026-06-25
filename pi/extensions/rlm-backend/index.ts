@@ -2,28 +2,46 @@
 // to the rrlm RLM-first harness (predict-rlm). The large data payload goes into
 // the harness REPL, never into Pi's context window -- which is the entire point.
 //
-// Install (one of):
-//   - symlink this dir into ~/.pi/agent/extensions/, or
-//   - add its path to settings.json "extensions", or
-//   - run pi with -e /path/to/pi/extensions/rlm-backend/index.ts
+// Models come from your Pi config: by default the harness orchestrates with the
+// SAME model Pi is currently using (read from the tool's execution context), and
+// resolves credentials/endpoints from ~/.pi/agent/ -- local, OpenRouter, OpenAI,
+// Anthropic, z.ai, etc. Override per the env table below.
 //
-// Requires the rrlm project venv. Set RRLM_DIR to the project root (defaults to
-// the dir two levels above this file). The settled local models must be served
-// (pi-tune llama-server :8773 + supergemma leaf :8771); override via RRLM_MAIN/RRLM_SUB.
+// Install (one of):
+//   - `uv tool install rrlm` (or pipx), then point pi at this extension; or
+//   - run from a checkout with RRLM_DIR set (uses `uv run` in that project).
+//
+// Env knobs:
+//   RRLM_MAIN     orchestrator model ref (Pi 'provider/model'); default: Pi's current model
+//   RRLM_SUB      leaf model ref for predict() fan-out; default: same as main
+//   RRLM_BACKEND  sandbox backend: 'jspi' (default), 'sbx', or 'supervisor'
+//   RRLM_DIR      project checkout to run via `uv run` (dev mode); unset = installed rrlm-solve
 
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const RRLM_DIR = process.env.RRLM_DIR ?? resolve(HERE, "..", "..", "..");
-const MAIN_MODEL = process.env.RRLM_MAIN ?? "qwen3.6-27b-pitune-local";
-const SUB_MODEL = process.env.RRLM_SUB ?? "supergemma-26b-local";
+const RRLM_DIR = process.env.RRLM_DIR;
 const BACKEND = process.env.RRLM_BACKEND ?? "jspi";
+
+// Best-effort: turn Pi's current Model object into an rrlm model reference
+// (provider/id). Defensive about the provider field shape across pi versions.
+function modelRef(model: unknown): string | undefined {
+  if (!model || typeof model !== "object") return undefined;
+  const m = model as { id?: unknown; provider?: unknown };
+  const id = typeof m.id === "string" ? m.id : undefined;
+  let provider: string | undefined;
+  if (typeof m.provider === "string") provider = m.provider;
+  else if (m.provider && typeof m.provider === "object") {
+    const p = m.provider as { name?: unknown; id?: unknown };
+    provider = (typeof p.name === "string" && p.name) || (typeof p.id === "string" && p.id) || undefined;
+  }
+  if (!id) return undefined;
+  return provider ? `${provider}/${id}` : id;
+}
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
@@ -51,13 +69,22 @@ export default function (pi: ExtensionAPI) {
         Type.String({ description: "Absolute path to a data file, instead of inline data." }),
       ),
     }),
-    // Signature-robust across pi versions: the trailing args (onUpdate/ctx/
-    // signal) have shifted between releases, so detect the AbortSignal by shape
-    // rather than relying on a fixed position, and skip the progress callback.
+    // Signature-robust across pi versions: the trailing args (signal/onUpdate/ctx)
+    // have shifted between releases, so detect the AbortSignal and the execution
+    // context (which carries `.model`) by shape rather than by position.
     async execute(_id, params, ...rest) {
       const signal = rest.find(
         (a): a is AbortSignal => !!a && typeof a === "object" && "aborted" in a,
       );
+      const ctx = rest.find(
+        (a): a is { model?: unknown } =>
+          !!a && typeof a === "object" && ("model" in a || "modelRegistry" in a),
+      );
+
+      // Orchestrator model: explicit override, else Pi's current model, else let
+      // rrlm-solve fall back to Pi's configured default (~/.pi/config.json).
+      const mainRef = process.env.RRLM_MAIN ?? modelRef(ctx?.model);
+      const subRef = process.env.RRLM_SUB;
 
       // Stage inline data to a temp file so huge payloads never hit argv limits.
       let dataArg: string;
@@ -71,29 +98,21 @@ export default function (pi: ExtensionAPI) {
         dataArg = `@${dataFile}`;
       }
 
+      const solveArgs = [
+        "--instruction", params.instruction,
+        "--data", dataArg,
+        ...(mainRef ? ["--main", mainRef] : []),
+        ...(subRef ? ["--sub", subRef] : []),
+        "--backend", BACKEND,
+        "--json",
+      ];
+      // Installed: call rrlm-solve on PATH. Dev: run it inside the checkout via uv.
+      const [command, args, options] = RRLM_DIR
+        ? ["uv", ["run", "--", "rrlm-solve", ...solveArgs], { cwd: RRLM_DIR, signal, timeout: 3_600_000 }]
+        : ["rrlm-solve", solveArgs, { signal, timeout: 3_600_000 }];
+
       try {
-        const result = await pi.exec(
-          "uv",
-          [
-            "run",
-            "--",
-            "python",
-            "-m",
-            "rrlm.solve",
-            "--instruction",
-            params.instruction,
-            "--data",
-            dataArg,
-            "--main-model",
-            MAIN_MODEL,
-            "--sub-model",
-            SUB_MODEL,
-            "--backend",
-            BACKEND,
-            "--json",
-          ],
-          { cwd: RRLM_DIR, signal, timeout: 3_600_000 },
-        );
+        const result = await pi.exec(command as string, args as string[], options as object);
 
         if (result.code !== 0) {
           return {
@@ -108,6 +127,7 @@ export default function (pi: ExtensionAPI) {
         const payload = JSON.parse(result.stdout);
         const u = payload.usage ?? {};
         const summary =
+          `model=${payload.config?.main_model ?? "?"} ` +
           `calls=${u.calls ?? 0} ` +
           `tokens=${u.prompt_tokens ?? 0}+${u.completion_tokens ?? 0} ` +
           `wall=${payload.wall_clock_s}s ` +

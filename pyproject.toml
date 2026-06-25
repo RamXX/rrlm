@@ -1,18 +1,40 @@
 [project]
 name = "rrlm"
 version = "0.1.0"
-description = "Add your description here"
+description = "An RLM-first backend for the Pi coding agent: delegate data-heavy subtasks to a recursive-language-model harness instead of stuffing data into context."
 readme = "README.md"
+license = { text = "MIT" }
 authors = [
-    { name = "RamXX", email = "ramxx@ramirosalas.com" }
+    { name = "Ramiro Salas", email = "ramxx@ramirosalas.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.11"
+keywords = ["rlm", "recursive-language-models", "pi", "coding-agent", "dspy", "predict-rlm", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "dspy>=3.2.1",
     "httpx>=0.28.1",
-    "predict-rlm[gepa]>=0.6.1",
+    "predict-rlm>=0.7.0",
     "python-dotenv>=1.2.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/RamXX/rrlm"
+Repository = "https://github.com/RamXX/rrlm"
+Issues = "https://github.com/RamXX/rrlm/issues"
+
+[project.scripts]
+rrlm-solve = "rrlm.solve:main"
+rrlm-bench = "rrlm.bench.runner:main"
+rrlm-report = "rrlm.bench.report:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -23,7 +45,23 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
     "respx>=0.23.1",
+    "ruff>=0.9.0",
 ]
 
-[tool.uv.sources]
-predict-rlm = { path = "../predict-rlm", editable = true }
+[tool.pytest.ini_options]
+markers = [
+    "real: end-to-end test that calls a live model (needs credentials / a served model)",
+    "integration: needs external tooling (Pi, Deno) and is excluded from CI unit runs",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+extend-select = ["I"]  # import sorting
+
+# Contributors hacking on predict-rlm alongside rrlm can point the dependency at a
+# local checkout WITHOUT editing this file, e.g. in a git-ignored uv.toml or via:
+#   uv pip install -e ../predict-rlm
+# The published package always resolves predict-rlm from PyPI.

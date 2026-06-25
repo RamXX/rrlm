@@ -11,7 +11,8 @@ MODEL="${MODEL:-mlx-community/Qwen3.6-27B-8bit}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8772}"
 
-exec /Users/ramirosalas/.local/bin/mlx_lm.server \
+# mlx_lm.server resolved from PATH; override with $MLX_LM_SERVER if needed.
+exec "${MLX_LM_SERVER:-mlx_lm.server}" \
   --model "$MODEL" \
   --host "$HOST" \
   --port "$PORT"

@@ -5,13 +5,18 @@ agent: the data lands in the REPL, the orchestrator writes code to probe it,
 fans out cheap sub-LM classification only when the data is irreducible, and
 returns a verified answer. The data never enters the orchestrator's context.
 
+Models are resolved from your Pi config (``rrlm.pi_config``): pass a Pi model
+reference (``provider/model`` or a bare model id), or omit ``--main`` to use the
+model Pi is currently set to. ``--sub`` defaults to the same model as ``--main``;
+point it at a cheaper non-thinking model to make the fan-out path inexpensive.
+
 CLI:
-    python -m rrlm.solve --instruction "..." --data @path/to/file
-    echo "<data>" | python -m rrlm.solve --instruction "..." --data -
-    python -m rrlm.solve --instruction "..." --data "inline text" --json
+    rrlm-solve --instruction "..." --data @path/to/file
+    echo "<data>" | rrlm-solve --instruction "..." --data -
+    rrlm-solve -i "..." -d "inline text" --main openrouter/qwen/qwen3.6-27b --json
 
 Library:
-    from rrlm.solve import solve
+    from rrlm import solve
     result = solve("Which product has the most negative reviews?", data=text)
     print(result["answer"])
 """
@@ -24,23 +29,18 @@ import json
 import sys
 import time
 
-from rrlm.config import MODELS, HarnessConfig, load_env
+from rrlm.config import HarnessConfig, load_env
 from rrlm.harness import build_lm, build_rlm
 from rrlm.metrics import harvest_lm_history, reconcile, summarize
-
-# Settled orchestrator (won the local bake-off): the pi-tune Q6_K model served
-# by llama-server (no-thinking native, temp 0.7) + supergemma leaf. reasoning and
-# temperature are resolved per-model from the registry when not overridden.
-DEFAULT_MAIN = "qwen3.6-27b-pitune-local"
-DEFAULT_SUB = "supergemma-26b-local"
+from rrlm.pi_config import resolve_model
 
 
 def solve(
     instruction: str,
     data: str = "",
     *,
-    main_model: str = DEFAULT_MAIN,
-    sub_model: str = DEFAULT_SUB,
+    main_model: str | None = None,
+    sub_model: str | None = None,
     reasoning: str | None = None,
     temperature: float | None = None,
     backend: str = "jspi",
@@ -51,20 +51,31 @@ def solve(
 ) -> dict:
     """Run the RLM-first agent over (instruction, data); return answer + metrics.
 
-    Returns a dict: answer, wall_clock_s, spawn_stats, usage, error.
+    ``main_model``/``sub_model`` are Pi model references (``provider/model`` or a
+    bare id); ``None`` for ``main_model`` uses Pi's current default and ``None``
+    for ``sub_model`` reuses ``main_model``. Returns a dict: answer, error,
+    wall_clock_s, spawn_stats, usage, config.
 
-    `reasoning`/`temperature` default to the main model's registry recommendation
-    (e.g. pi-tune: no-thinking native, temp 0.7). `max_action_retries` defaults
-    to 2: it absorbs intermittent malformed/empty action turns.
+    ``reasoning`` defaults to ``off`` for thinking-capable orchestrators (the
+    settled finding: orchestrator thinking adds latency/variance without
+    accuracy) and ``default`` otherwise. ``max_action_retries`` is applied only
+    when the installed predict-rlm supports per-turn action retries.
     """
-    api_key = load_env()
-    spec = MODELS[main_model]
-    reasoning = reasoning if reasoning is not None else spec.default_reasoning
-    temperature = temperature if temperature is not None else spec.default_temperature
-    local = spec.api_base is not None or MODELS[sub_model].api_base is not None
+    # Load .env first so OPENROUTER_API_KEY (the no-Pi path) is visible to model
+    # resolution and to cost reconciliation.
+    or_key = load_env()
+    main = resolve_model(main_model)
+    sub = resolve_model(sub_model) if sub_model else main
+
+    if reasoning is None:
+        reasoning = "off" if main.supports_reasoning else "default"
+    if temperature is None:
+        temperature = 0.2
+    local = main.is_local or sub.is_local
+
     cfg = HarnessConfig(
-        main_model=main_model,
-        sub_model=sub_model,
+        main_model=main.ref,
+        sub_model=sub.ref,
         reasoning=reasoning,
         temperature=temperature,
         backend=backend,
@@ -74,8 +85,12 @@ def solve(
         max_action_retries=max_action_retries,
     )
 
-    main_lm = build_lm(main_model, api_key, cfg.main_max_tokens, cfg.temperature, reasoning=reasoning)
-    sub_lm = build_lm(sub_model, api_key, cfg.sub_max_tokens, cfg.temperature, reasoning=reasoning)
+    # Clamp per-turn caps to each model's real output limit so smaller models in
+    # someone else's Pi config don't trip a ValueError.
+    main_max = min(cfg.main_max_tokens, main.max_tokens)
+    sub_max = min(cfg.sub_max_tokens, sub.max_tokens)
+    main_lm = build_lm(main, main_max, temperature, reasoning=reasoning)
+    sub_lm = build_lm(sub, sub_max, temperature, reasoning=reasoning)
     main_start, sub_start = len(main_lm.history), len(sub_lm.history)
 
     answer, error, spawn_stats = "", None, {}
@@ -92,9 +107,9 @@ def solve(
     records = harvest_lm_history(main_lm, "main", main_start) + harvest_lm_history(
         sub_lm, "sub", sub_start
     )
-    # Only hosted (OpenRouter) calls are reconcilable; local gen ids are skipped.
+    # Only hosted OpenRouter calls are reconcilable; local/foreign gen ids skip.
     if reconcile_cost and any(r.gen_id and r.gen_id.startswith("gen-") for r in records):
-        reconcile(records, api_key)
+        reconcile(records, or_key)
 
     return {
         "answer": answer,
@@ -103,8 +118,8 @@ def solve(
         "spawn_stats": spawn_stats,
         "usage": summarize(records),
         "config": {
-            "main_model": main_model,
-            "sub_model": sub_model,
+            "main_model": main.ref,
+            "sub_model": sub.ref,
             "reasoning": reasoning,
             "backend": backend,
         },
@@ -124,18 +139,27 @@ def _read_data(arg: str | None) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="RLM-first solve: instruction + data -> answer")
+    parser = argparse.ArgumentParser(
+        prog="rrlm-solve",
+        description="RLM-first solve: instruction + data -> answer (models from Pi config)",
+    )
     parser.add_argument("--instruction", "-i", required=True, help="what to accomplish")
     parser.add_argument(
         "--data", "-d", default=None, help="data payload: literal, @file, or - for stdin"
     )
-    parser.add_argument("--main-model", default=DEFAULT_MAIN, choices=sorted(MODELS))
-    parser.add_argument("--sub-model", default=DEFAULT_SUB, choices=sorted(MODELS))
+    parser.add_argument(
+        "--main", "--main-model", dest="main_model", default=None,
+        help="orchestrator model (Pi 'provider/model' or bare id); default: Pi's current model",
+    )
+    parser.add_argument(
+        "--sub", "--sub-model", dest="sub_model", default=None,
+        help="leaf model for predict() fan-out; default: same as --main",
+    )
     parser.add_argument(
         "--reasoning", default=None, choices=["default", "off", "low", "medium", "high"],
-        help="default: per-model registry recommendation",
+        help="default: off for thinking-capable orchestrators, else default",
     )
-    parser.add_argument("--temperature", type=float, default=None, help="default: per-model recommendation")
+    parser.add_argument("--temperature", type=float, default=None, help="sampling temperature (default 0.2)")
     parser.add_argument("--backend", default="jspi", choices=["jspi", "sbx", "supervisor"])
     parser.add_argument("--max-depth", type=int, default=2)
     parser.add_argument("--action-retries", type=int, default=2, help="per-turn re-asks on parse failure")

@@ -1,42 +1,122 @@
-# rrlm -- RLM-first coding agent experiment
+# rrlm
 
-Tests the hypothesis that an agent which defaults to Recursive Language Model
-(RLM) execution -- all data lives in a REPL, the model acts only by writing
-Python, decomposition recurses via depth-gated sub-agents -- outperforms
-context-stuffing, especially for small-context models that are strong coders.
+An **RLM-first backend for the [Pi coding agent](https://github.com/earendil-works/pi)**.
 
-Built on `predict-rlm` (DSPy `RLM` subclass) over OpenRouter models.
+`rrlm` lets a coding agent handle data far larger than its context window. Instead
+of stuffing a big file, log, or codebase into the conversation, the agent delegates
+to a Recursive Language Model (RLM) harness: the data lands in a sandboxed Python
+REPL, the model acts only by writing code to probe it, fans out cheap sub-model
+calls only for irreducible semantic judgment, verifies, and returns an answer. The
+agent keeps a *map* of state in context, not the state itself.
 
-## Setup
+It ships as a Pi tool (`rlm_solve`) plus a routing skill, and as a standalone CLI
+(`rrlm-solve`) and library (`from rrlm import solve`). Built on
+[`predict-rlm`](https://pypi.org/project/predict-rlm/).
+
+**Why it works** (see [docs/FINDINGS.md](docs/FINDINGS.md)): on exact aggregation
+over many items, context-stuffing silently miscounts before it hits context limits,
+while the RLM's cost and accuracy stay flat in data size. For 262K-context local
+models, stuffing a 1M-token task is impossible -- the RLM is the only way to do it
+at all, for under a cent.
+
+## Models come from Pi
+
+rrlm does **not** keep its own model registry. It resolves models from your Pi
+config (`~/.pi/agent/models.json`, `settings.json`, `auth.json`, and
+`~/.pi/config.json`) -- local servers, OpenRouter, OpenAI, Anthropic, z.ai,
+whatever you have configured. A model reference is `provider/model` (e.g.
+`openrouter/qwen/qwen3.6-27b`, `lmstudio/qwen/qwen3.6-27b`) or a bare model id; omit
+it to use the model Pi is currently set to.
+
+## Install
 
 ```bash
+uv tool install rrlm          # or: pipx install rrlm
+```
+
+You also need [Deno](https://deno.land) for the default Pyodide sandbox (`jspi`
+backend), and either a model configured in Pi or an `OPENROUTER_API_KEY`.
+
+From a checkout for development:
+
+```bash
+git clone https://github.com/RamXX/rrlm && cd rrlm
 uv sync
-cp .env.example .env   # then fill in OPENROUTER_API_KEY
 ```
 
-Requires Deno (for the Pyodide sandbox) and, later, Docker (sbx backend).
+## Use it
 
-## Run
+### As a CLI / library
 
 ```bash
-make test                      # unit tests, no network
-make smoke                     # RLM condition, synthetic ledger task
-make baseline                  # context-stuffed baseline, same task
-make compare SIZE=5000         # both conditions + comparison table
-make report                    # table across all recorded runs
+# inline / file / stdin; models default to your Pi config
+rrlm-solve -i "Total revenue for completed EMEA orders." -d @orders.csv
+echo "<data>" | rrlm-solve -i "..." -d -
+rrlm-solve -i "..." -d @data.txt --main openrouter/qwen/qwen3.6-27b --json
 ```
 
-## Metrics
+```python
+from rrlm import solve
 
-Every run writes `runs/<run_id>/`:
+result = solve("Which product id has the most negative reviews?", data=text)
+print(result["answer"], result["usage"]["cost_usd"])
+```
 
-- `run.json` -- model, condition, harness config, library versions
-- `events.jsonl` -- one record per LM call: generation id, tokens, and
-  authoritative cost (USD) + timing (`latency`, `generation_time`, ms) fetched
-  from OpenRouter's `GET /api/v1/generation` endpoint
-- `result.json` -- pass/fail, wall clock, spawn depth stats, usage totals
-- `trace.json` -- predict-rlm `RunTrace` (per-iteration reasoning/code/output)
+### As a Pi backend (the main event)
 
-Cost precedence per call: generation endpoint `total_cost` > inline
-`usage.cost` > LiteLLM estimate. `usage.cost_complete` in `result.json` flags
-runs where any call lacked an authoritative figure.
+Wire the extension + skill into Pi so the agent delegates data-heavy subtasks
+automatically. See [pi/README.md](pi/README.md). In short:
+
+```bash
+pi -e /path/to/rrlm/pi/extensions/rlm-backend/index.ts \
+   --skill /path/to/rrlm/pi/skills/rlm-first
+```
+
+The agent gets an `rlm_solve` tool and a skill telling it *when* to use it (large
+data, exact aggregation/search over many items, per-item judgment at scale) and
+when not to (small data it can just read). By default `rlm_solve` orchestrates with
+the same model Pi is currently using.
+
+## How the harness decides
+
+The orchestrator follows a fixed doctrine (`src/rrlm/playbooks.py`): probe the data
+cheaply, prefer deterministic Python over LM calls, use `predict()` only for genuine
+semantic judgment (batched with `asyncio.gather`), recurse only when a sub-problem's
+working set is too large, and verify before answering. Orchestrator thinking
+defaults to off (it adds latency and variance without accuracy here); point the leaf
+(`--sub`) at a cheap non-thinking model to make the fan-out path inexpensive.
+
+## Reproduce the benchmarks
+
+The research side lives in `src/rrlm/bench/` and writes per-run artifacts under
+`runs/`. With an `OPENROUTER_API_KEY`:
+
+```bash
+make compare SIZE=5000       # RLM vs context-stuffed baseline + comparison table
+make report                  # table across all recorded runs
+```
+
+Full results and methodology: [docs/FINDINGS.md](docs/FINDINGS.md).
+
+## Real-use-case evals
+
+```bash
+make eval-tabular            # exact aggregation over a large CSV (verifiable truth)
+make eval-bugfind            # code reasoning over a real repository
+make eval-pi                 # end-to-end Pi session that delegates to rlm_solve
+```
+
+## Local, offline, $0 inference
+
+You can run everything against on-device models (no API keys, fully private). See
+[docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md) and the `make serve-orch` /
+`make serve-leaf` targets.
+
+## Development
+
+```bash
+make test                    # unit tests (no network, no Deno)
+make lint                    # ruff
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed.
