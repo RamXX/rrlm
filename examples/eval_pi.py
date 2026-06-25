@@ -56,10 +56,16 @@ def main() -> int:
             cmd += ["--model", os.environ["PI_MODEL"]]
         cmd.append(prompt)
 
+        # If rrlm-solve isn't on PATH and RRLM_DIR isn't set, point the extension
+        # at this checkout so it runs the backend via `uv run`.
+        env = dict(os.environ)
+        if not shutil.which("rrlm-solve") and not env.get("RRLM_DIR"):
+            env["RRLM_DIR"] = str(REPO_ROOT)
+
         print(f"[pi] expected revenue: {expected_str}")
         print(f"[pi] running: {' '.join(cmd[:8])} ... (timeout 900s)")
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=env)
         except subprocess.TimeoutExpired:
             print("[pi] FAIL: timed out")
             return 1
