@@ -1,0 +1,21 @@
+{
+  "run_id": "20260627-023711_ledger-20000_pitune-qwen3.6-27b-pi-tune_baseline-roff",
+  "status": "error",
+  "error": "BadRequestError: litellm.BadRequestError: OpenAIException - request (915875 tokens) exceeds the available context size (65536 tokens), try increasing it",
+  "passed": false,
+  "check_detail": "no answer",
+  "answer": "",
+  "wall_clock_s": 0.86,
+  "spawn_stats": {},
+  "reconciled_calls": 0,
+  "usage": {
+    "calls": 0,
+    "by_role": {},
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0,
+    "cost_complete": true,
+    "generation_time_ms": 0,
+    "latency_ms": 0
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "run_id": "20260627-024959_bugfind-60_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2",
+  "status": "completed",
+  "error": null,
+  "passed": true,
+  "check_detail": "matched fn_040_sum_to",
+  "answer": "fn_040_sum_to",
+  "wall_clock_s": 718.66,
+  "spawn_stats": {},
+  "reconciled_calls": 0,
+  "usage": {
+    "calls": 6,
+    "by_role": {
+      "main": {
+        "calls": 6,
+        "prompt_tokens": 53035,
+        "completion_tokens": 3557,
+        "cost_usd": 0.0
+      }
+    },
+    "prompt_tokens": 53035,
+    "completion_tokens": 3557,
+    "cost_usd": 0.0,
+    "cost_complete": false,
+    "generation_time_ms": 0,
+    "latency_ms": 0
+  }
+}

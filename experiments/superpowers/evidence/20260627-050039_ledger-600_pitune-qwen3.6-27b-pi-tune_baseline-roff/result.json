@@ -1,0 +1,28 @@
+{
+  "run_id": "20260627-050039_ledger-600_pitune-qwen3.6-27b-pi-tune_baseline-roff",
+  "status": "completed",
+  "error": null,
+  "passed": false,
+  "check_detail": "expected 4714.03, answer numbers: [4256.78]",
+  "answer": "4256.78",
+  "wall_clock_s": 140.28,
+  "spawn_stats": {},
+  "reconciled_calls": 0,
+  "usage": {
+    "calls": 1,
+    "by_role": {
+      "baseline": {
+        "calls": 1,
+        "prompt_tokens": 27698,
+        "completion_tokens": 20,
+        "cost_usd": 0.0
+      }
+    },
+    "prompt_tokens": 27698,
+    "completion_tokens": 20,
+    "cost_usd": 0.0,
+    "cost_complete": false,
+    "generation_time_ms": 0,
+    "latency_ms": 0
+  }
+}

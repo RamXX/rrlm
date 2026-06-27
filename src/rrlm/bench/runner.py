@@ -50,9 +50,11 @@ def run_task(
     if cfg.reasoning != "default":
         variant += f"-r{cfg.reasoning}"
     if sub.ref != main.ref:
-        variant += f"-sub:{sub.ref}"
+        variant += f"-sub:{sub.ref.split('/')[-1]}"
     safe_model = main.ref.replace("/", "-")
+    # run_id is a single path segment: no '/' (would nest dirs) or ':' from refs.
     run_id = f"{started_at.strftime('%Y%m%d-%H%M%S')}_{task.task_id}_{safe_model}_{variant}"
+    run_id = run_id.replace("/", "-").replace(":", "-")
     logger = RunLogger(RUNS_DIR, run_id)
 
     main_lm = build_lm(

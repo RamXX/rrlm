@@ -1,0 +1,30 @@
+# RLM-superpower experiment -- environment (captured 2026-06-27T02:43:54Z)
+
+## Hardware / OS
+chip:    Apple M3 Max / Mac15,8
+cores:   16 | RAM: 128GB
+macOS:   26.6 (arm64)
+
+## Models (all local, $0 inference)
+orchestrator A (pi-tune):  bytkim/Qwen3.6-27B-MTP-pi-tune-GGUF  Q6_K  via llama-server :8773  (no-thinking native, temp 0.7)
+orchestrator B (official): mlx-community/Qwen3.6-27B-8bit       8-bit via mlx_lm.server :8772 (reasoning forced off)
+leaf (fan-out):            Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2  4-bit via DFlash :8771
+served context window:     65536 tokens (the 'context wall')
+
+## Serving binaries
+llama-server     /opt/homebrew/bin/llama-server
+mlx_lm.server    /Users/ramirosalas/.local/bin/mlx_lm.server
+dflash           /Users/ramirosalas/.local/bin/dflash
+llama-server: version: 9820 (3fc4e1052)
+
+## Python / libraries
+rrlm git commit: 27a113b (opensource-pi-backend)
+python: 3.13
+predict-rlm: 0.7.0
+dspy: 3.2.1
+litellm: 1.88.1
+
+## Harness
+bench runner: python -m rrlm.bench.runner  (condition rlm | baseline)
+tasks:        ledger (exact sum), needle (retrieval), bugfind (code), imdb (semantic fan-out) -- all with computed ground truth
+driver:       experiments/superpowers/run_matrix.sh

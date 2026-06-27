@@ -1,0 +1,28 @@
+{
+  "run_id": "20260627-023152_ledger-2000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2",
+  "status": "completed",
+  "error": null,
+  "passed": true,
+  "check_detail": "matched expected 10143.63",
+  "answer": "10143.63",
+  "wall_clock_s": 207.54,
+  "spawn_stats": {},
+  "reconciled_calls": 0,
+  "usage": {
+    "calls": 3,
+    "by_role": {
+      "main": {
+        "calls": 3,
+        "prompt_tokens": 19153,
+        "completion_tokens": 952,
+        "cost_usd": 0.0
+      }
+    },
+    "prompt_tokens": 19153,
+    "completion_tokens": 952,
+    "cost_usd": 0.0,
+    "cost_complete": false,
+    "generation_time_ms": 0,
+    "latency_ms": 0
+  }
+}

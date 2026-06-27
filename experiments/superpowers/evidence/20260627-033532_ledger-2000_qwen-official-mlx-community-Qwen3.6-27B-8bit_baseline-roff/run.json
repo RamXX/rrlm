@@ -1,0 +1,67 @@
+{
+  "run_id": "20260627-033532_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_baseline-roff",
+  "started_at": "2026-06-27T03:35:32.988278+00:00",
+  "task_id": "ledger-2000",
+  "task_kind": "aggregation",
+  "task_meta": {
+    "n_lines": 2000,
+    "seed": 42,
+    "target_user": "u754",
+    "target_txn_count": 42,
+    "expected_total": 10143.63,
+    "data_chars": 143342
+  },
+  "model": "qwen-official/mlx-community/Qwen3.6-27B-8bit",
+  "model_spec": {
+    "main": {
+      "ref": "qwen-official/mlx-community/Qwen3.6-27B-8bit",
+      "provider": "qwen-official",
+      "model_id": "mlx-community/Qwen3.6-27B-8bit",
+      "litellm_id": "openai/mlx-community/Qwen3.6-27B-8bit",
+      "api_key": "<redacted>",
+      "api_base": "http://127.0.0.1:8772/v1",
+      "context_window": 262100,
+      "max_tokens": 65536,
+      "supports_reasoning": true,
+      "reasoning_style": "chat_template",
+      "is_local": true,
+      "needs_json_schema": false,
+      "openrouter_routing": null
+    },
+    "sub": {
+      "ref": "qwen-official/mlx-community/Qwen3.6-27B-8bit",
+      "provider": "qwen-official",
+      "model_id": "mlx-community/Qwen3.6-27B-8bit",
+      "litellm_id": "openai/mlx-community/Qwen3.6-27B-8bit",
+      "api_key": "<redacted>",
+      "api_base": "http://127.0.0.1:8772/v1",
+      "context_window": 262100,
+      "max_tokens": 65536,
+      "supports_reasoning": true,
+      "reasoning_style": "chat_template",
+      "is_local": true,
+      "needs_json_schema": false,
+      "openrouter_routing": null
+    }
+  },
+  "condition": "baseline",
+  "harness": {
+    "main_model": "qwen-official/mlx-community/Qwen3.6-27B-8bit",
+    "sub_model": "qwen-official/mlx-community/Qwen3.6-27B-8bit",
+    "max_depth": 2,
+    "max_iterations": 30,
+    "max_llm_calls": 50,
+    "main_max_tokens": 16384,
+    "sub_max_tokens": 8192,
+    "temperature": 0.2,
+    "backend": "jspi",
+    "reasoning": "off",
+    "sandbox_exec_timeout": 3600.0,
+    "max_action_retries": 0
+  },
+  "versions": {
+    "dspy": "3.2.1",
+    "predict-rlm": "0.7.0",
+    "litellm": "1.88.1"
+  }
+}
