@@ -7,15 +7,19 @@ more capability, you buy it. A bigger model. A longer context window. More token
 more GPUs, more cloud. Capability is a line item.
 
 This is the story of taking that assumption apart — not with an argument, but with a
-controlled experiment you can re-run yourself. It ends with a small model running
-entirely on a laptop, with no internet and at zero cost, doing exact computation
-over 900,000 tokens of data on a model whose context window holds 65,000 — work it
-**cannot do on its own, at any size of prompt.** Not because the model got smarter.
-Because we changed the *technique*.
+controlled experiment you can re-run yourself, and a working application built from
+nothing to prove the point twice. It runs through a small model on a laptop, with no
+internet and at zero cost, doing exact computation over 900,000 tokens of data on a
+model whose context window holds 65,000 — work it **cannot do on its own, at any size
+of prompt** — and it ends with that same small model building real, working software,
+file by file, compiling as it goes. Not because the model got smarter. Because we
+changed the *technique*.
 
-The technique is the Recursive Language Model. The point of this article is that the
-technique is the capability — and that has consequences the whole industry has not
-priced in yet.
+The technique is the Recursive Language Model, but the deeper idea is a posture: a
+model should try to *do* things — write code, run it, check the answer — and only fall
+back to guessing from its weights when nothing checkable will do. The point of this
+article is that the technique, not the model size, is the capability — and that has
+consequences the whole industry has not priced in yet.
 
 ---
 
@@ -96,7 +100,8 @@ person funding this said it plainly:
 
 > *We're trying to prove that RLM, the technique, can give a small model superpowers.*
 
-So we stopped building an app and built a proof.
+So we set the build aside — we would come back to it, and finish it — and built a
+proof first.
 
 ---
 
@@ -248,7 +253,54 @@ command re-runs it from zero.
 
 ---
 
-## 7. What this means
+## 7. But it was never just about data
+
+Here is where we almost fooled ourselves. It is tempting to read the result above as
+"RLM is a great trick for big data." That is too small. The real variable in every one
+of those 55 cells was not *size* — it was *verifiability*. Reading-and-reasoning is
+stochastic and uncheckable, so the model guessed and missed. Writing code is
+deterministic and checkable, so it was exact, and it re-checked itself. The principle
+was never "use a REPL for large inputs." It is:
+
+> **Wherever a procedure exists whose answer you can check, prefer it to the model's
+> unverifiable guess. Fall back to raw generation only for the irreducible part no
+> procedure can express.**
+
+That is a posture for *everything*, not a tactic for spreadsheets. "What is the capital
+of France" stops being a recall from the model's weights — which can be stale or simply
+wrong — and becomes a grounded lookup you can cite and re-run. The model's role shifts
+from *oracle* to *orchestrator*: its first instinct is to write the program, call the
+tool, decompose the problem, and check the result; its own free-form generation becomes
+one instrument in the kit, and the fallback rather than the default.
+
+So we went back to the CRM — the build we'd abandoned — to test the posture on
+something that looks nothing like a sum.
+
+The first attempt had failed exactly the way you'd expect a small model to fail: handed
+the spec, it tried to write the entire data layer, seven hundred lines, in one shot,
+never compiling, and after sixteen minutes had produced nothing that worked. The easy
+conclusion was "small models can't build software." It was the wrong conclusion. The
+model's *code* was fine. It had abandoned the discipline — it stopped decomposing and
+stopped verifying. So we rebuilt the harness to make the posture non-negotiable: one
+small file at a time, compile after every file, check the real API instead of guessing
+it, write a test.
+
+The same model — same weights, same laptop — then built a working CRM. Six clean,
+properly sized files, not a blob. It compiled at every step. It grounded itself against
+the real database API with `go doc` instead of hallucinating it (which is exactly what
+had broken the first attempt). Its test passed. And the command line *worked*:
+`crm init` created a real graph database, `crm contact add` wrote a person into it, and
+`crm contact list` read that person back out — data that genuinely round-tripped
+through the database, not a printed illusion.
+
+Nothing about the model got better between the failure and the success. The
+*discipline* did. Building software, it turns out, is the same superpower as summing a
+ledger: act by producing something you can check. The verifier just changes shape — a
+recomputed total, a passing test, a database that returns what you put into it.
+
+---
+
+## 8. What this means
 
 Step back from the numbers and look at the shape.
 
@@ -270,14 +322,25 @@ That has consequences that are easy to state and hard to overstate:
 - **It decouples from spend.** Zero dollars per run. The marginal cost of being exact
   over a million tokens of your own data, on your own hardware, is electricity.
 
-None of this says big models don't matter. It says the *default* is wrong. The default
-should not be "throw a bigger model at it." The default should be: **hold the data
-out of the model's head, give it a place to compute, and let a small, cheap, local
-model be exact.** Reach for scale when you've earned the need, not before.
+And underneath the economics sits a prize that matters more than any of them.
+**An agent whose default is to act through checkable procedures is an agent whose every
+answer arrives with a procedure you can audit and re-run.** Not "trust me" — but "here
+is the code, here is the source, run it yourself." Groundedness by construction. For
+anything regulated, high-stakes, or simply important, that is the difference between a
+plausible guess and a result you can stand behind, and it falls out of the posture for
+free.
 
-There is another way. We didn't argue it. We measured it, 55 times, with the answers
-checked, on a laptop, for free — and then we wrote down exactly how, so you can do it
-too.
+None of this says big models don't matter. It says the *default* is wrong. The default
+should not be "throw a bigger model at it." The default should be: **try to answer with
+code you can verify; decompose the problem; check the result; and fall back to the
+model's raw, stochastic generation only for the part that nothing checkable can
+express.** Hold the data out of the model's head and give it a place to compute. Reach
+for scale when you've earned the need, not before. The model is not your oracle. It is
+your programmer.
+
+There is another way. We didn't argue it. We measured it — 55 controlled tests with the
+answers checked, plus a working application built from scratch — on a laptop, for free,
+and then wrote down exactly how, so you can do it too.
 
 The model didn't get smarter. We gave it a better way to think. Start there.
 
