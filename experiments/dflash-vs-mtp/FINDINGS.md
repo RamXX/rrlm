@@ -237,7 +237,7 @@ ledger RLM wall-clock (seconds), DFlash vs the same model on plain mlx_lm:
 - The eye-catching warm "23 s" was a **prefix-cache artifact**: repeating the *identical*
   prompt let DFlash skip prefill entirely. On fresh prompts that advantage disappears.
 
-### Confounds (be honest)
+### Confounds
 
 - End-to-end RLM wall-clock has **2-4x run-to-run variance** from cold/warm caches,
   prefix-cache reuse, and apparent soft throttling/contention over a long (~40 min)

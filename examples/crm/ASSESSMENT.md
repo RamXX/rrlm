@@ -33,7 +33,7 @@ prefill (the bottleneck of this loop) cheap.
   is the headline progress signal: the stronger coder self-heals where the weaker one
   stalled.
 
-### Blemishes (honest)
+### Blemishes
 - `import` de-duplicates *within* the CSV but not against existing DB contacts: a spec
   interpretation gap, not a crash (it runs cleanly).
 - The agent left a stray root scratch file `test_ddl_main.go` (a DDL probe), removed in

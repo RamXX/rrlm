@@ -141,7 +141,7 @@ fraction"):**
 The capability gap returns on natural language too: at 1,500 reviews the model alone
 cannot ingest them; RLM works over all of them.
 
-## 5. The honest boundary -- where the model alone is fine (or better)
+## 5. The boundary -- where the model alone is fine (or better)
 
 RLM is a *targeted* superpower, not a universal upgrade. On small inputs that fit and
 are easy, the model alone is correct and **faster**, because RLM pays a fixed
