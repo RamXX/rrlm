@@ -1,4 +1,4 @@
-# RLM-superpower experiment -- environment (captured 2026-06-27T02:43:54Z)
+# RLM-superpower experiment: environment (captured 2026-06-27T02:43:54Z)
 
 ## Hardware / OS
 chip:    Apple M3 Max / Mac15,8
@@ -13,8 +13,8 @@ served context window:     65536 tokens (the 'context wall')
 
 ## Serving binaries
 llama-server     /opt/homebrew/bin/llama-server
-mlx_lm.server    /Users/ramirosalas/.local/bin/mlx_lm.server
-dflash           /Users/ramirosalas/.local/bin/dflash
+mlx_lm.server    ~/.local/bin/mlx_lm.server
+dflash           ~/.local/bin/dflash
 llama-server: version: 9820 (3fc4e1052)
 
 ## Python / libraries
@@ -26,5 +26,5 @@ litellm: 1.88.1
 
 ## Harness
 bench runner: python -m rrlm.bench.runner  (condition rlm | baseline)
-tasks:        ledger (exact sum), needle (retrieval), bugfind (code), imdb (semantic fan-out) -- all with computed ground truth
+tasks:        ledger (exact sum), needle (retrieval), bugfind (code), imdb (semantic fan-out), all with computed ground truth
 driver:       experiments/superpowers/run_matrix.sh

@@ -47,7 +47,7 @@
     "speedup_median": 3.0636079847915454
   },
   "ctx_tokens": 0,
-  "cwd": "/Users/ramirosalas/workspace/rrlm",
+  "cwd": "/path/to/rrlm",
   "dflash_version": "0.1.8",
   "draft": "z-lab/Qwen3.6-27B-DFlash",
   "effective_config": {
