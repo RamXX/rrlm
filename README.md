@@ -1,23 +1,32 @@
 # rrlm
 
-An **RLM-first backend for the [Pi coding agent](https://github.com/earendil-works/pi)**.
+An **RLM-first backend for the [Pi coding agent](https://github.com/earendil-works/pi)** --
+and a demonstration that the Recursive Language Model (RLM) is a **posture for quality
+work, not just a trick for huge context.**
 
-`rrlm` lets a coding agent handle data far larger than its context window. Instead
-of stuffing a big file, log, or codebase into the conversation, the agent delegates
-to a Recursive Language Model (RLM) harness: the data lands in a sandboxed Python
-REPL, the model acts only by writing code to probe it, fans out cheap sub-model
-calls only for irreducible semantic judgment, verifies, and returns an answer. The
-agent keeps a *map* of state in context, not the state itself.
+Most RLM work fixates on cramming data bigger than the context window into a REPL.
+That's real, but it misses the point. RLM is **code-first and verify** -- write code,
+run it, read the result, fix, iterate -- instead of emitting an answer in one stochastic
+shot. That posture makes even a **small local model generate quality software.**
 
-It ships as a Pi tool (`rlm_solve`) plus a routing skill, and as a standalone CLI
-(`rrlm-solve`) and library (`from rrlm import solve`). Built on
-[`predict-rlm`](https://pypi.org/project/predict-rlm/).
+We prove it two ways:
 
-**Why it works** (see [docs/FINDINGS.md](docs/FINDINGS.md)): on exact aggregation
-over many items, context-stuffing silently miscounts before it hits context limits,
-while the RLM's cost and accuracy stay flat in data size. For 262K-context local
-models, stuffing a 1M-token task is impossible -- the RLM is the only way to do it
-at all, for under a cent.
+1. **Code generation (the headline).** A 35B MoE model on a laptop builds a complete
+   graph CRM in Go -- file by file, compiling as it goes, *fixing its own bugs* -- in
+   ~12 minutes, at $0, with **minimal data/context**. The capability is the
+   code-first / run-it / verify / iterate loop, not a big prompt. See
+   **[examples/crm](examples/crm)**.
+2. **Data beyond context (the usual RLM story).** Exact computation over data far larger
+   than the window: the agent writes code to probe a sandboxed REPL, fans out cheap
+   sub-model calls only for irreducible semantic judgment, and verifies -- keeping a
+   *map* of state in context, not the state itself. Context-stuffing silently miscounts
+   long before it hits the limit; the RLM stays exact and cheap as data grows (a
+   1M-token task on a 262K-context model is impossible to stuff -- the RLM does it for
+   under a cent). See [docs/FINDINGS.md](docs/FINDINGS.md) and
+   [experiments/superpowers](experiments/superpowers).
+
+It ships as a Pi tool (`rlm_solve`) plus a routing skill, a CLI (`rrlm-solve`), and a
+library (`from rrlm import solve`). Built on [`predict-rlm`](https://pypi.org/project/predict-rlm/).
 
 ## Models come from Pi
 
@@ -76,6 +85,15 @@ The agent gets an `rlm_solve` tool and a skill telling it *when* to use it (larg
 data, exact aggregation/search over many items, per-item judgment at scale) and
 when not to (small data it can just read). By default `rlm_solve` orchestrates with
 the same model Pi is currently using.
+
+### Generate code with it (the headline use)
+
+The same posture drives *building software*: a local model writes code one file at a
+time, compiles, reads the error, fixes, and iterates -- delegating to `rlm_solve` only
+for the rare data-heavy subtask. [**examples/crm**](examples/crm) is the worked proof:
+a 35B model on a laptop builds a complete graph CRM in Go in ~12 minutes, self-fixing
+its own bugs, with minimal data/context. That is the capability this repo exists to
+demonstrate.
 
 ## How the harness decides
 

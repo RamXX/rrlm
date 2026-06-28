@@ -1,0 +1,3 @@
+phase	pass	start_epoch	dur_s	go_files	build	test	rlm	report
+phase1	1	1782632381	125	5	GREEN	PASS	no	no
+full	1	1782632506	512	10	GREEN	PASS	yes	yes

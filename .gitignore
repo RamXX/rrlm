@@ -27,3 +27,6 @@ experiments/superpowers/driver.log
 experiments/superpowers/PIPELINE_DONE
 *.bak.*
 *.err
+
+# personal narrative (kept local, not part of the repo)
+ARTICLE.md

@@ -1,0 +1,6 @@
+bin/
+*.db
+*.db.lock
+*.db.wal
+.ladycrm/
+lib-ladybug/
