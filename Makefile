@@ -3,11 +3,16 @@ RUN := uv run -p $(PYTHON_VERSION) --
 
 # --- Models -----------------------------------------------------------------
 # rrlm resolves models from your Pi config (see rrlm.pi_config). MAIN/SUB are Pi
-# model references (provider/model or a bare id). The defaults below reproduce the
-# settled cheap pair from the benchmarks against OpenRouter (needs OPENROUTER_API_KEY);
-# override with anything in your Pi config, e.g. MAIN=lmstudio/qwen/qwen3.6-27b.
+# model references (provider/model or a bare id). Two contexts, kept distinct on purpose:
+#   * DATA benchmarks/evals (below): default to a CLOUD pair (Qwen3.6-27B + gemma-4-26b
+#     via OpenRouter, needs OPENROUTER_API_KEY) so anyone can run them without a GPU.
+#   * The LOCAL flagship orchestrator is Ornith-1.0-35B (see serve-orch / CRM_MODEL and
+#     docs/LOCAL_SERVING.md). Override MAIN to run the evals locally too, e.g.
+#     MAIN=ornith/ornith-1.0-35b SUB=supergemma/... make eval-tabular.
 MAIN ?= openrouter/qwen/qwen3.6-27b
 SUB  ?= openrouter/google/gemma-4-26b-a4b-it
+# Orchestrator for the code-generation example (make eval-crm); the local flagship.
+CRM_MODEL ?= ornith/ornith-1.0-35b
 REASONING ?= off
 SEED ?= 42
 SIZE ?= 2000
@@ -20,7 +25,7 @@ INSTRUCTION ?= Which product id has the most negative reviews? Answer with the i
 DATA ?= -
 
 .PHONY: setup test lint smoke baseline compare report clean-runs \
-        solve pi-run eval-tabular eval-bugfind eval-pi \
+        solve pi-run eval-tabular eval-bugfind eval-pi eval-crm \
         serve-orch serve-leaf serve-stop serve-purge
 
 setup:
@@ -62,6 +67,8 @@ pi-run:
 		--skill $(CURDIR)/pi/skills/rlm-first
 
 # --- Real-use-case evals (need a configured model; pi eval needs pi) ---------
+# Three DATA evals (default to the cloud MAIN/SUB pair) plus the CODE-GENERATION
+# example (eval-crm), the headline use: a local model builds a CRM. See examples/crm.
 eval-tabular:
 	$(RUN) python examples/eval_tabular.py
 
@@ -70,6 +77,13 @@ eval-bugfind:
 
 eval-pi:
 	RRLM_DIR=$(CURDIR) $(RUN) python examples/eval_pi.py
+
+# Code generation: a local model builds LadyCRM file-by-file (Phase 1 + full spec),
+# timed + quality-gated + traces. Needs `make serve-orch` + `make serve-leaf` running.
+# Override the orchestrator with CRM_MODEL=<provider/model>. Output in examples/crm/runs/.
+eval-crm:
+	cd examples/crm && rm -rf runs/build && cp -R template runs/build && \
+	  RRLM_TRACE_DIR=runs/build/traces bash build_loop.sh $(CRM_MODEL) runs/build
 
 # --- Optional local model servers (offline / $0 inference) ------------------
 # See docs/LOCAL_SERVING.md. Run each in its own terminal.

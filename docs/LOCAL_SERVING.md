@@ -9,15 +9,50 @@ bake-off in [../experiments/dflash-vs-mtp/FINDINGS.md](../experiments/dflash-vs-
 is a **fast, high-quality MoE orchestrator** plus a **cheap, quantized, non-thinking
 leaf**:
 
-- Orchestrator: **Ornith-1.0-35B** (`deepreinforce-ai/Ornith-1.0-35B-GGUF`, Qwen3.5
-  35B MoE, agentic coding -- SWE-bench Verified 75.6), Q6_K, served by `llama-server`
-  with continuous batching (`--parallel`, `-fa on`), thinking off for the RLM role.
+- Orchestrator: **Ornith-1.0-35B** (`deepreinforce-ai/Ornith-1.0-35B-GGUF`), a Qwen3.5
+  **MoE with 256 experts and 8 active per token** (35B total, ~3B active; agentic coding,
+  SWE-bench Verified 75.6), Q6_K, served by `llama-server` with continuous batching
+  (`--parallel`, `-fa on`), thinking off for the RLM role.
 - Leaf: `supergemma-26b` (gemma-4-26b uncensored, 4-bit MLX) served via DFlash.
 
-Ornith is the only orchestrator. It was chosen over a dense Qwen3.6-27B (pi-tune /
-official) because its MoE keeps prefill cheap (the RLM loop is prefill-bound), making
-it ~5-8x faster end-to-end while passing the full superpowers proof, and because it
-*scales* under parallel agents where the dense MLX paths collapsed.
+Ornith is the only orchestrator, chosen by the bake-off below.
+
+## How we chose the local model (the bake-off)
+
+This stack is not a guess; it is the result of a measured bake-off. Full record:
+[../experiments/dflash-vs-mtp/FINDINGS.md](../experiments/dflash-vs-mtp/FINDINGS.md).
+The short version:
+
+1. **Candidates.** A Pi-harness-tuned dense Qwen3.6-27B (pi-tune, Q6_K GGUF) and the
+   official Qwen3.6-27B at Q8 (MLX), across three local engines: llama.cpp (GGUF),
+   mlx_lm (MLX), and DFlash (MLX speculative decoding), plus llama.cpp MTP
+   self-speculative decoding.
+2. **Decode speed looked decisive, then wasn't.** On a sustained 512-token generation,
+   DFlash hit ~39 tok/s versus ~12.8 (plain MLX) and ~11 (llama.cpp MTP). But run through
+   the real RLM loop that advantage mostly vanished: the workload is prefill-bound (a
+   large REPL context is re-sent each turn, outputs are short), so decode throughput is
+   not the bottleneck. DFlash's apparent edge was largely a prefix-cache artifact.
+3. **Concurrency picked the engine.** For parallel agents, the MLX engines (mlx_lm and
+   DFlash) are single-stream and collapse at ~8 concurrent requests; llama.cpp
+   `--parallel` degrades gracefully. So the engine is llama.cpp.
+4. **A MoE picked the model.** Swapping the dense 27B for Ornith-1.0-35B (Qwen3.5 MoE,
+   256 experts, 8 active per token) was the real unlock. Because only ~8 experts fire per
+   token, prefill (the bottleneck) is cheap and there is GPU headroom to batch. On the
+   same llama.cpp engine, Ornith is roughly 5 to 8x faster end-to-end than the dense 27B,
+   it passes the full superpowers proof, and it self-fixed a bug the dense model needed a
+   human to fix.
+
+## Performance (M3 Max, 128GB; Ornith Q6_K on llama.cpp --parallel)
+
+- Single short RLM solve: a few seconds warm; longer with many REPL turns or heavy leaf
+  fan-out.
+- Code generation: the CRM example builds the full spec in ~12.5 minutes over 3 passes
+  (Phase 1 in ~2 min, the full spec in one ~8.5 min pass, plus a ~2 min fix pass). See
+  [../examples/crm](../examples/crm).
+- Concurrency: aggregate throughput holds up to ~60 tok/s across 8 parallel clients with
+  no collapse; the single-stream MLX paths collapsed at the same load.
+- Quant rule: Q6 or higher for the orchestrator, never Q4 (the leaf is intentionally
+  4-bit, a cheap high-volume classifier).
 
 ## Scripts
 

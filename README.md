@@ -11,11 +11,11 @@ shot. That posture makes even a **small local model generate quality software.**
 
 We prove it two ways:
 
-1. **Code generation (the headline).** A 35B MoE model on a laptop builds a complete
-   graph CRM in Go -- file by file, compiling as it goes, *fixing its own bugs* -- in
-   ~12 minutes, at $0, with **minimal data/context**. The capability is the
-   code-first / run-it / verify / iterate loop, not a big prompt. See
-   **[examples/crm](examples/crm)**.
+1. **Code generation (the headline).** A small local model (Ornith-1.0-35B, a Qwen3.5
+   MoE with 256 experts and only 8 active per token) on a laptop builds a complete graph
+   CRM in Go, file by file, compiling as it goes, *fixing its own bugs*, in ~12 minutes,
+   at $0, with **minimal data/context**. The capability is the code-first, run-it,
+   verify, iterate loop, not a big prompt. See **[examples/crm](examples/crm)**.
 2. **Data beyond context (the usual RLM story).** Exact computation over data far larger
    than the window: the agent writes code to probe a sandboxed REPL, fans out cheap
    sub-model calls only for irreducible semantic judgment, and verifies -- keeping a
@@ -135,17 +135,27 @@ Full results and methodology: [docs/FINDINGS.md](docs/FINDINGS.md).
 
 ## Real-use-case evals
 
+The first three are DATA evals; they default to a cloud pair (Qwen3.6-27B + gemma-4-26b
+via OpenRouter) so they run without a GPU. The fourth is the CODE-GENERATION example,
+the headline use, and it runs on the local Ornith orchestrator.
+
 ```bash
-make eval-tabular            # exact aggregation over a large CSV (verifiable truth)
-make eval-bugfind            # code reasoning over a real repository
-make eval-pi                 # end-to-end Pi session that delegates to rlm_solve
+make eval-tabular            # data: exact aggregation over a large CSV (verifiable truth)
+make eval-bugfind            # data: code reasoning over a real repository
+make eval-pi                 # data: end-to-end Pi session that delegates to rlm_solve
+make eval-crm                # CODE GEN: a local model builds LadyCRM (see examples/crm)
 ```
+
+`make eval-crm` needs `make serve-orch` + `make serve-leaf` running; override the
+orchestrator with `CRM_MODEL=<provider/model>`. Run the data evals locally too with
+`MAIN=ornith/ornith-1.0-35b SUB=supergemma/...`.
 
 ## Local, offline, $0 inference
 
-You can run everything against on-device models (no API keys, fully private). See
-[docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md) and the `make serve-orch` /
-`make serve-leaf` targets.
+You can run everything against on-device models (no API keys, fully private). The
+settled local stack (a MoE orchestrator + a cheap leaf) and the bake-off that chose it,
+with the performance numbers, are in [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md);
+bring it up with the `make serve-orch` / `make serve-leaf` targets.
 
 ## Development
 
