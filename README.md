@@ -65,6 +65,10 @@ uv tool install .        # optional: install the rrlm-solve / rrlm-traces CLIs
   backend). Install with `curl -fsSL https://deno.land/install.sh | sh`, or `brew
   install deno`, or follow the [Deno install guide](https://docs.deno.com/runtime/getting_started/installation/).
   The `supervisor` backend (the `rrlm-solve` default) needs no Deno.
+- [Docker](https://www.docker.com/) (or another container runtime), only if you want to
+  run CI locally (the Dagger pipeline, `make ci`) or use the `sbx` sandbox backend. The
+  `sbx` backend additionally needs the `sbx` CLI (`brew install docker/tap/sbx`, then
+  `sbx login`).
 - A model configured in Pi (see below), or an `OPENROUTER_API_KEY`.
 
 ## Use it
@@ -132,8 +136,8 @@ predict-rlm):
   with `rrlm-traces list`, `rrlm-traces read --last`, `rrlm-traces grep <pattern>`.
 - **Execution sandbox** (`RRLM_BACKEND`): `supervisor` (host CPython, default, fastest),
   `jspi` (Deno/Pyodide WASM, local, $0), or `sbx` (Docker Linux container, strongest
-  isolation; auto-reuses a warm container to keep per-call overhead low). See
-  [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
+  isolation; needs Docker and the `sbx` CLI; auto-reuses a warm container to keep
+  per-call overhead low). See [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
 
 ## Reproduce the benchmarks
 
@@ -182,13 +186,13 @@ make cov                     # offline suite with the 80% coverage gate
 The suite runs fully offline and deterministically: a local OpenAI-compatible stub
 server stands in for the model, so the integration and e2e tests exercise the real code
 path (the `rrlm-solve` CLI, the library, and the predict-rlm REPL loop) with no LLM-call
-mocks. Combined coverage of `src/rrlm/` is ~98%, gated at 80% by `make cov` and CI.
+mocks. Combined coverage of `src/rrlm/` is 98.03%, gated at 80% by `make cov` and CI.
 
 ### CI (Dagger, provider-agnostic)
 
 CI is a [Dagger](https://dagger.io) module (`dagger/`), not a provider workflow.
-It runs the same offline suite as `make cov`, in a container, anywhere with a
-container runtime (Docker is fine):
+It runs the same offline suite as `make cov` in a container, so it requires a
+container runtime (Docker):
 
 ```bash
 make ci                      # = dagger call ci : lint, then the 80% coverage gate
