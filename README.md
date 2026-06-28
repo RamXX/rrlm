@@ -1,5 +1,16 @@
 # rrlm
 
+[![CI: Dagger](https://img.shields.io/badge/CI-Dagger-131226?logo=dagger&logoColor=white)](docs/CI.md)
+[![not GitHub Actions](https://img.shields.io/badge/not-GitHub%20Actions-lightgrey)](docs/CI.md)
+[![coverage 98%](https://img.shields.io/badge/coverage-98%25-brightgreen)](docs/CI.md)
+[![tests 130 passing](https://img.shields.io/badge/tests-130%20passing-brightgreen)](tests)
+[![license MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+> CI runs as a provider-agnostic [Dagger](https://dagger.io) pipeline (`make ci`), not
+> GitHub Actions. These are static badges reflecting the gate (`dagger call ci`: ruff +
+> the 98% offline suite, 80% floor); wire any provider to `dagger call ci` for live
+> status. See [docs/CI.md](docs/CI.md).
+
 An **RLM-first backend for the [Pi coding agent](https://github.com/earendil-works/pi)**,
 and a demonstration that the Recursive Language Model (RLM) is a **posture for quality
 work, not just a trick for huge context.**
