@@ -1,6 +1,6 @@
 """rrlm: an RLM-first backend for the Pi coding agent.
 
-The public entry point is :func:`rrlm.solve.solve` -- give it an instruction and
+The public entry point is :func:`rrlm.solve.solve`, give it an instruction and
 a (possibly large) data payload and it runs the recursive-language-model harness,
 returning a verified answer plus usage metrics. Models are resolved from your Pi
 config (see :mod:`rrlm.pi_config`).

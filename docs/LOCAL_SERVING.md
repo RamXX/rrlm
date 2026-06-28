@@ -64,10 +64,10 @@ All live in `scripts/local-serving/` and are parameterized by environment variab
 |--------|--------|--------------|
 | `serve-ornith.sh` | Ornith-1.0-35B Q6_K orchestrator via `llama-server` (`--parallel`, `-fa on`) | 8774 |
 | `serve-models.sh` | supergemma leaf via DFlash | 8771 |
-| `purge-dflash-cache.sh` | drop the regenerable DFlash prefix cache (leaf) | -- |
+| `purge-dflash-cache.sh` | drop the regenerable DFlash prefix cache (leaf) | n/a |
 
 ```bash
-# orchestrator (own terminal) -- Ornith, thinking off, continuous batching
+# orchestrator (own terminal): Ornith, thinking off, continuous batching
 make serve-orch                       # -> serve-ornith.sh (NOTHINK=1)
 
 # leaf (own terminal)
@@ -84,7 +84,7 @@ superpowers proof (sequential cells needing the full 65536 context wall) use
 
 Prerequisites: [`llama.cpp`](https://github.com/ggml-org/llama.cpp) (`llama-server`)
 for the orchestrator, and DFlash for the leaf. GGUF/MLX weights download from Hugging
-Face on first run (some DFlash draft repos are gated -- run `hf auth login`).
+Face on first run (some DFlash draft repos are gated, run `hf auth login`).
 
 ## Point Pi (and rrlm) at the local servers
 
@@ -121,14 +121,14 @@ rrlm-solve -i "..." -d @data.txt \
 
 Wall-clock for these workloads is dominated by **prefill** of the re-sent REPL context
 and by **leaf fan-out**, not orchestrator decode. An MoE orchestrator (Ornith) makes
-prefill cheap and -- on `llama-server --parallel` -- lets concurrent agents batch
+prefill cheap and, on `llama-server --parallel`, lets concurrent agents batch
 instead of collapse (the single-stream MLX paths, mlx_lm and DFlash, serialized and
 fell over at ~8 concurrent requests). rrlm also auto-raises the per-turn sandbox
 timeout to 3600s for local endpoints, because the local leaf still serves serially and
 a wide fan-out runs as one REPL turn (the imdb-1500 cell makes hundreds of sequential
 leaf calls). The leaf is the bottleneck for heavy semantic fan-out, but the
 supergemma + DFlash leaf is proven and works well, so it is kept as-is (a llama.cpp
-`--parallel` leaf was considered and set aside -- no need to disturb a working leaf).
+`--parallel` leaf was considered and set aside, no need to disturb a working leaf).
 Details in [../experiments/dflash-vs-mtp/FINDINGS.md](../experiments/dflash-vs-mtp/FINDINGS.md).
 
 
@@ -139,7 +139,7 @@ built-in; nothing here patches predict-rlm):
 
 | `RRLM_BACKEND` | isolation | notes |
 |---|---|---|
-| `supervisor` (default) | none -- host CPython | fastest; fine for trusted local use |
+| `supervisor` (default) | none, host CPython | fastest; fine for trusted local use |
 | `jspi` | Deno/Pyodide WASM | local, $0, zero-setup (Deno present); slower cold-start |
 | `sbx` | real Linux container (Docker) | strongest; needs `predict-rlm[sbx]` + the `sbx` CLI (`brew install docker/tap/sbx`, `sbx login`); ~25s/call ephemeral overhead (use a persistent reused sandbox to amortize) |
 

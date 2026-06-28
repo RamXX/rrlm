@@ -4,7 +4,7 @@ Generates a realistic orders CSV (seeded, ~6000 rows), then asks the harness for
 an exact revenue total over a filtered subset. The ground truth is recomputed in
 pure Python, so this verifies the path synthetic semantic data never forced: being
 exact over many rows, where free-form reading silently miscounts but REPL code
-does not. The CSV is too large to want in a chat context -- the everyday "too big
+does not. The CSV is too large to want in a chat context, the everyday "too big
 for context" case.
 
     python examples/eval_tabular.py            # uses your Pi default model

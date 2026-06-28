@@ -128,7 +128,7 @@ class TestFetchGenerationErrors:
 class TestReconcile:
     def test_second_pass_fills_records_missed_on_first_pass(self, monkeypatch):
         # First fetch attempt misses (record not yet written), the delayed second
-        # pass succeeds -- the exact path real long generations exercise.
+        # pass succeeds, the exact path real long generations exercise.
         calls = {"n": 0}
 
         def fake_fetch(gen_id, api_key, *, client=None):

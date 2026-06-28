@@ -71,13 +71,13 @@ def main() -> None:
                     shutil.copy2(src / name, dst / name)
 
     # group rows by (task, model)
-    print("# RLM-superpower matrix -- results\n")
+    print("# RLM-superpower matrix, results\n")
     by_task: dict[tuple, list[dict]] = {}
     for r in rows:
         by_task.setdefault((r["task"], r["model"]), []).append(r)
 
     for (task, model), cells in sorted(by_task.items()):
-        print(f"## {task} -- {model}\n")
+        print(f"## {task}, {model}\n")
         print("| size | seed | condition | passed | status | wall_s | prompt_tok | detail |")
         print("|---|---|---|---|---|---|---|---|")
         for c in sorted(cells, key=lambda x: (int(x["size"]), x["seed"], x["condition"])):

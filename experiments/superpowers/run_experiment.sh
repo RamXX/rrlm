@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Single RESUMABLE driver for the whole RLM-superpower experiment. Each cell is
 # skipped if its result is already in results.tsv, so a kill/reap just means
-# relaunch -- completed cells return instantly. Launch DETACHED (nohup &) so the
+# relaunch, completed cells return instantly. Launch DETACHED (nohup &) so the
 # driver itself survives background-task reaping (model servers + this driver).
 #
 #   nohup bash experiments/superpowers/run_experiment.sh > experiments/superpowers/driver.log 2>&1 &
 set -uo pipefail
 cd "$(dirname "$0")/../.."   # rrlm root
 RUN="uv run -p $(cat .python-version) -- python -m rrlm.bench.runner"
-# Orchestrator: Ornith-1.0-35B (Qwen3.5 MoE) -- the settled top model (Track C).
+# Orchestrator: Ornith-1.0-35B (Qwen3.5 MoE), the settled top model (Track C).
 # Both the old PITUNE and QWEN slots now point here so the whole matrix runs on Ornith.
 ORCH="ornith/ornith-1.0-35b"
 PITUNE="$ORCH"
@@ -61,7 +61,7 @@ cell needle  baseline 2000 "$PITUNE" 42
 cell needle  rlm      2000 "$PITUNE" 42 "$LEAF"
 cell bugfind baseline 60   "$PITUNE" 42
 cell bugfind rlm      60   "$PITUNE" 42 "$LEAF"
-# ---- Phase 3: imdb semantic, small (fits) -- baseline ok; rlm via cheap leaf
+# ---- Phase 3: imdb semantic, small (fits), baseline ok; rlm via cheap leaf
 cell imdb baseline 200 "$PITUNE" 42
 cell imdb rlm      200 "$PITUNE" 42 "$LEAF"
 # ---- Phase 4: cross-model robustness (official Qwen3.6-27B)
@@ -74,16 +74,16 @@ for size in 2000 5000; do
   cell ledger baseline $size "$PITUNE" 43
   cell ledger rlm      $size "$PITUNE" 43 "$LEAF"
 done
-# ---- Phase 6: ACCURACY SWEEP -- fitting sizes, 3 seeds (rebut "just context size")
+# ---- Phase 6: ACCURACY SWEEP, fitting sizes, 3 seeds (rebut "just context size")
 for seed in 42 43 44; do
   for size in 100 300 600 1000 1300; do
     cell ledger baseline $size "$PITUNE" $seed
     cell ledger rlm      $size "$PITUNE" $seed "$LEAF"
   done
 done
-# ---- Phase 7: leaf ablation -- imdb with orchestrator as its own leaf (rlm-self)
+# ---- Phase 7: leaf ablation, imdb with orchestrator as its own leaf (rlm-self)
 cell imdb rlm 200 "$PITUNE" 42 "" rlm-self
-# ---- Phase 8: imdb CAPABILITY gap -- reviews overflow the window
+# ---- Phase 8: imdb CAPABILITY gap, reviews overflow the window
 cell imdb baseline 1500 "$PITUNE" 42
 cell imdb rlm      1500 "$PITUNE" 42 "$LEAF"
 

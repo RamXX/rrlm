@@ -13,7 +13,7 @@ We prove it two ways:
 
 1. **Code generation (the headline).** A small local model (Ornith-1.0-35B, a Qwen3.5
    MoE with 256 experts and only 8 active per token) on a laptop builds a complete graph
-   CRM in Go, file by file, compiling as it goes, *fixing its own bugs*, in ~12 minutes,
+   CRM in Go, file by file, compiling as it goes, *fixing its own bugs*, in ~12.5 minutes,
    at $0, with **minimal data/context**. The capability is the code-first, run-it,
    verify, iterate loop, not a big prompt. See **[examples/crm](examples/crm)**.
 2. **Data beyond context (the usual RLM story).** Exact computation over data far larger
@@ -90,7 +90,7 @@ pi -e /path/to/rrlm/pi/extensions/rlm-backend/index.ts \
 Then just talk to it: "add a `--json` flag and a test for it", "find and fix the failing
 case", "build a graph CRM from this spec". It works file by file, compiles, and
 self-corrects, the exact loop that produced [**examples/crm**](examples/crm), where a
-35B local model built a complete Go CRM in about 12 minutes, fixing its own bugs, with
+35B local model built a complete Go CRM in about 12.5 minutes, fixing its own bugs, with
 minimal data and context. Point Pi at a local orchestrator for $0, fully private coding
 (see [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md)).
 
@@ -173,7 +173,7 @@ make eval-crm                # CODE GEN: a local model builds LadyCRM (see examp
 
 `make eval-crm` needs `make serve-orch` + `make serve-leaf` running; override the
 orchestrator with `CRM_MODEL=<provider/model>`. Run the data evals locally too with
-`MAIN=ornith/ornith-1.0-35b SUB=supergemma/...`.
+`RRLM_MAIN=ornith/ornith-1.0-35b RRLM_SUB=supergemma/...`.
 
 ## Local, offline, $0 inference
 

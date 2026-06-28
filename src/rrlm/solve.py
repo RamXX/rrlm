@@ -1,4 +1,4 @@
-"""General-purpose RLM-first solve entry point -- the backend Pi delegates to.
+"""General-purpose RLM-first solve entry point, the backend Pi delegates to.
 
 Given an instruction and a (possibly large) data payload, run the RLM-first
 agent: the data lands in the REPL, the orchestrator writes code to probe it,
@@ -112,7 +112,7 @@ def solve(
         spawn_stats = dict(rlm.spawn_stats)
     except (asyncio.TimeoutError, TimeoutError):
         error = f"TimeoutError: run exceeded timeout_s={timeout_s}s"
-    except Exception as exc:  # noqa: BLE001 -- return the failure to the caller
+    except Exception as exc:  # noqa: BLE001, return the failure to the caller
         error = f"{type(exc).__name__}: {exc}"
     wall_clock_s = time.monotonic() - t0
 
@@ -165,7 +165,7 @@ def export_trace(
     These are the traces consumed by RLM-GEPA later. Returns the path or None.
 
     No-op (returns None) when ``trace_dir`` is falsy, the prediction has no
-    ``trace``, or anything goes wrong -- trace capture must never break solve().
+    ``trace``, or anything goes wrong, trace capture must never break solve().
     """
     trace = getattr(prediction, "trace", None)
     if not trace_dir or trace is None or not hasattr(trace, "to_exportable_json"):
@@ -188,7 +188,7 @@ def export_trace(
         with open(index, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, default=str) + "\n")
         return path
-    except Exception:  # noqa: BLE001 -- trace capture is best-effort, never fatal
+    except Exception:  # noqa: BLE001, trace capture is best-effort, never fatal
         return None
 
 
@@ -233,7 +233,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=None,
                         help="hard total wall-clock ceiling in seconds (env RRLM_TIMEOUT); cancels the run on overrun")
     parser.add_argument("--max-llm-calls", type=int, default=50,
-                        help="hard cap on sub-LM (predict) calls -- the de-facto spend ceiling")
+                        help="hard cap on sub-LM (predict) calls, the de-facto spend ceiling")
     parser.add_argument("--max-iterations", type=int, default=30, help="hard cap on REPL turns")
     parser.add_argument("--json", action="store_true", help="emit full result JSON, not just the answer")
     args = parser.parse_args()

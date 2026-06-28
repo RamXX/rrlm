@@ -1,5 +1,15 @@
 # Findings: RLM-first vs context-stuffing (qwen3.7-max, 2026-06-12)
 
+> **Scope note (read first).** This document records the RLM-vs-baseline benchmark
+> methodology and results, which stand. Its local-serving conclusion further down
+> ("Final orchestrator: pi-tune Q6_K", 2026-06-17) is a point-in-time result that was
+> later **superseded** by a dedicated serving bake-off: the settled local orchestrator
+> is now **Ornith-1.0-35B** on `llama-server --parallel`, not pi-tune. For the current
+> local stack and the bake-off that chose it, see
+> [LOCAL_SERVING.md](LOCAL_SERVING.md) and
+> [../experiments/dflash-vs-mtp/FINDINGS.md](../experiments/dflash-vs-mtp/FINDINGS.md)
+> (Section 10). The pi-tune material below is kept as a dated lab record.
+
 All runs: OpenRouter `qwen/qwen3.7-max`, authoritative cost/timing from the
 generation endpoint, artifacts under `runs/`. n=1-2 per cell. Conditions:
 `rlm` (predict-rlm REPL agent, doctrine skill, depth-gated rlm_spawn) vs
@@ -85,7 +95,7 @@ else:
 
 With latency-sensitive workloads, add: medium read-only tasks (~50-250KB)
 favor baseline on wall-clock when the model can answer without heavy
-reasoning (bugfind-2000: 23s vs 44s) -- pay ~4x cost for ~2x speed.
+reasoning (bugfind-2000: 23s vs 44s), pay ~4x cost for ~2x speed.
 
 ## Cross-model battery (2026-06-12, seed 42)
 
@@ -102,7 +112,7 @@ locally-runnable, low-context arm of the hypothesis.
 | gemma-4-26b | pass $0.0023 / 18s | **rejected** (exceeds 262K ctx) |
 | qwen3.6-27b | pass $0.0077 / 34s | **rejected** (exceeds 262K ctx) |
 
-RLM is not an optimization for the 262K models here -- it is the only way the
+RLM is not an optimization for the 262K models here: it is the only way the
 task can be done at all. Capability grant confirmed: small-context models do
 1M-token-class work for under a cent.
 
@@ -118,7 +128,7 @@ Within-context code reading favors the baseline for weaker orchestrators;
 gemma could not drive the REPL to a correct diff-based strategy but read the
 answer directly in 13s. Only qwen3.6-27b matched its own baseline via REPL.
 
-### imdb-1000 (natural semantic text, 521KB -- template induction impossible)
+### imdb-1000 (natural semantic text, 521KB, template induction impossible)
 
 | model | RLM | baseline |
 |---|---|---|
@@ -127,7 +137,7 @@ answer directly in 13s. Only qwen3.6-27b matched its own baseline via REPL.
 | gemma-4-26b | pass $0.057 / 629s (**1020 predict calls**) | pass $0.013 / 29s |
 | qwen3.6-27b | pass $0.539 / 625s (52 predict calls) | **fail** (truncated at 32K completion cap) |
 
-The semantic fan-out path finally activated -- on real text every model
+The semantic fan-out path finally activated, on real text every model
 reached for predict(), at self-chosen granularity (per-review for gemma,
 ~50-per-batch for max). Doctrine self-routing works. But for strong long-ctx
 readers within budget, stuffing is cheaper and faster on pure semantic reads.
@@ -135,7 +145,7 @@ readers within budget, stuffing is cheaper and faster on pure semantic reads.
 ### Thinking ablation (ledger-2000 baseline, qwen3.7-max)
 
 reasoning=default: correct, $0.153, 192s. reasoning=off: **wrong in 5s**
-($0.115, 19 output tokens). The baseline's thinking burn is not waste -- it is
+($0.115, 19 output tokens). The baseline's thinking burn is not waste: it is
 the only thing making stuffed mechanical work correct. Stuffed condition must
 choose slow+expensive+right vs fast+wrong; RLM sidesteps the dilemma.
 
@@ -193,7 +203,7 @@ Goal: reproduce the OpenRouter pair result on locally-served models. Orchestrato
 ### Uncensored + quantized variants: fail at scale
 
 heretic (Qwen3.6-27B uncensored oQ8) orchestrator + supergemma (gemma-4-26b 4bit)
-leaf. Replicated at moderate scale -- ledger-10000, bugfind-2000, imdb-200 (full
+leaf. Replicated at moderate scale, ledger-10000, bugfind-2000, imdb-200 (full
 200-call fan-out, correct) all pass. But imdb-1000 failed three times, three
 different ways, all orchestrator-side: dithered on batch sizes then guessed
 wrong; ran past the LM call timeout; ran away to a 16k-token malformed output.
@@ -216,7 +226,7 @@ reach the right answer. sbx is ~30% faster than jspi for wide fan-out.
 **Conclusion: orchestrator fidelity is the entire gap.** Same cheap leaf; only
 the orchestrator changed (uncensored-oQ8 -> official) and the result flips from
 unreliable to 4/4. This is the strongest form of the earlier finding that
-orchestrator quality dominates leaf quality -- and it validates the cost-optimal
+orchestrator quality dominates leaf quality, and it validates the cost-optimal
 shape: a high-fidelity orchestrator with cheap, quantized, non-thinking leaves.
 
 ### Engineering findings for local RLM deployment
@@ -230,7 +240,7 @@ shape: a high-fidelity orchestrator with cheap, quantized, non-thinking leaves.
 - **LM Studio rejects `response_format: json_object`** (wants `json_schema` or
   `text`); DSPy's JSONAdapter fallback sends json_object. Fix: register the model
   with litellm as `supports_response_schema=True` so DSPy emits json_schema.
-- **mlx_lm.server loads the model named per request** -- the registry slug must
+- **mlx_lm.server loads the model named per request**, the registry slug must
   equal the server `--model` value; thinking is toggled via
   `chat_template_kwargs.enable_thinking`, not the OpenRouter `reasoning` field.
 - DFlash speculative-decoding drafts (z-lab) are gated HF repos; lossless, so
@@ -241,7 +251,7 @@ shape: a high-fidelity orchestrator with cheap, quantized, non-thinking leaves.
 The settled harness is wrapped for [pi](https://github.com/earendil-works/pi)
 (see `pi/`): a `rlm_solve` tool (extension) delegates data-heavy subtasks to
 `rrlm.solve`, and an `rlm-first` skill encodes the routing rule. Verified
-end-to-end -- pi calls `rlm_solve`, the harness runs, the answer returns
+end-to-end, pi calls `rlm_solve`, the harness runs, the answer returns
 (json-mode `tool_execution_*` events confirm the call). The agent keeps a map of
 state in context; the data lives in the harness REPL.
 
@@ -278,13 +288,18 @@ Key findings:
   deadlocked after ~11 turns and leaked subprocesses. Use jspi/sbx.
 - **Action-generation retry (local predict-rlm branch, not upstreamed):** the
   retry must change the *prompt* (a nudge naming the parse failure), not just
-  sampling -- deterministic backends ignore temperature, so plain re-ask and
+  sampling, deterministic backends ignore temperature, so plain re-ask and
   temperature escalation are no-ops there. The nudge altered the prompt but
   could not rescue the DFlash s43 turn (the model was genuinely stuck at that
   state); switching the server fixed it. The retry remains sound general
   insurance for stochastic backends.
 
-## Final orchestrator: pi-tune Q6_K (2026-06-17)
+## Orchestrator as of 2026-06-17: pi-tune Q6_K (later superseded by Ornith)
+
+> Superseded: this was the chosen orchestrator on 2026-06-17. A subsequent serving
+> bake-off settled on **Ornith-1.0-35B** on `llama-server --parallel` (see the scope
+> note at the top and [LOCAL_SERVING.md](LOCAL_SERVING.md)). The analysis below is kept
+> as a dated record; `serve-pitune.sh` is no longer part of the repo.
 
 A Pi-harness-tuned Qwen3.6-27B (`bytkim/Qwen3.6-27B-MTP-pi-tune`, no-thinking
 native, trained on real agent traces) replaced the base-Qwen orchestrators.
@@ -310,21 +325,22 @@ Decisions, with receipts:
   Mac. Kept as an off-by-default `SPEC_MTP` toggle in `serve-pitune.sh`.
 - **Q6_K beats Q4_K_M.** Q4 passed 2/2 but was sloppier (more REPL exec-error
   churn: 3/7 and 5/10 steps vs Q6's ~1-2/6) and **not faster** (8.87 vs 9.18
-  tok/s -- bandwidth-bound; the smaller quant's dequant cost cancels the size
+  tok/s, bandwidth-bound; the smaller quant's dequant cost cancels the size
   benefit), saving only ~5GB. Q6_K is the settled quant; Q4 GGUF deleted.
 - **General lesson (reaffirmed):** for this leaf-fan-out-dominated workload,
   orchestrator decode speed barely moves wall-clock; orchestrator *reliability*
   (clean turns) is what matters. Speculative tricks (DFlash, MTP) and smaller
   quants traded reliability/cleanliness for speed that the workload can't use.
 
-Settled local config: `bytkim/Qwen3.6-27B-MTP-pi-tune` **Q6_K** via
-`serve-pitune.sh` (llama-server :8773, no-thinking, temp 0.7) + supergemma-26b
-leaf (DFlash :8771) + **jspi** backend + nudge-retry insurance.
+Local config as of this date (since superseded by Ornith, see the scope note):
+`bytkim/Qwen3.6-27B-MTP-pi-tune` **Q6_K** via llama-server (:8773, no-thinking,
+temp 0.7) + supergemma-26b leaf (DFlash :8771) + **jspi** backend + nudge-retry
+insurance.
 
 ## Open items / caveats
 
 - n=1-2 per cell, single model, synthetic template data.
-- predict()/rlm_spawn paths unexercised -- needs natural corpora and real
+- predict()/rlm_spawn paths unexercised, needs natural corpora and real
   repos (Docker sbx) where code cannot compress the semantics.
 - Reasoning-token cap on OpenRouter qwen appears decoupled from max_tokens;
   budget guards should use cost ceilings rather than token caps.

@@ -1,6 +1,6 @@
 """Harness budgets, paths, and environment loading.
 
-Model configuration is no longer a registry here -- it is resolved from Pi's own
+Model configuration is no longer a registry here, it is resolved from Pi's own
 config (see ``rrlm.pi_config``), so rrlm runs whatever models Pi provides.
 """
 

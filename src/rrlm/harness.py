@@ -155,7 +155,7 @@ def build_rlm(
         tools.append(_make_rlm_spawn(cfg, main_lm, sub_lm, depth, spawn_stats))
 
     # Backend selection. "supervisor" (0.7) runs real local CPython with no
-    # Deno/WASM bridge -- fastest for wide local fan-out and no JSPI hang -- and
+    # Deno/WASM bridge (fastest for wide local fan-out and no JSPI hang) and
     # is passed as interpreter= (mutually exclusive with sandbox_backend).
     rlm_kwargs: dict = dict(
         lm=main_lm,

@@ -1,4 +1,4 @@
-"""Pi-config model resolution tests -- no network, isolated temp Pi config."""
+"""Pi-config model resolution tests, no network, isolated temp Pi config."""
 
 from __future__ import annotations
 

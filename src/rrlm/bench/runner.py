@@ -95,7 +95,7 @@ def run_task(
             answer = prediction.answer
         else:
             raise ValueError(f"unknown condition: {condition}")
-    except Exception as exc:  # noqa: BLE001 -- record the failure, then continue accounting
+    except Exception as exc:  # noqa: BLE001, record the failure, then continue accounting
         status, error = "error", f"{type(exc).__name__}: {exc}"
         traceback.print_exc()
     wall_clock_s = time.monotonic() - t0

@@ -118,7 +118,7 @@ class _Handler(BaseHTTPRequestHandler):
     # Set by the server factory below.
     slow_seconds = 0.5
 
-    def log_message(self, *args):  # noqa: D401 -- silence default stderr logging
+    def log_message(self, *args):  # noqa: D401, silence default stderr logging
         return
 
     def _write_json(self, status: int, payload: dict) -> None:
@@ -129,14 +129,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def do_GET(self):  # noqa: N802 -- BaseHTTPRequestHandler API
+    def do_GET(self):  # noqa: N802, BaseHTTPRequestHandler API
         # Some clients probe /v1/models; answer benignly.
         if self.path.endswith("/models"):
             self._write_json(200, {"object": "list", "data": [{"id": "stub-model"}]})
         else:
             self._write_json(404, {"error": "not found"})
 
-    def do_POST(self):  # noqa: N802 -- BaseHTTPRequestHandler API
+    def do_POST(self):  # noqa: N802, BaseHTTPRequestHandler API
         if not self.path.endswith("/chat/completions"):
             self._write_json(404, {"error": f"unknown path {self.path}"})
             return

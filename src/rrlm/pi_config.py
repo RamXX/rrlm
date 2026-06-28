@@ -1,7 +1,7 @@
 """Resolve model references against the local Pi (pi-coding-agent) config.
 
-rrlm runs whatever models Pi is already configured with -- local servers,
-OpenRouter, OpenAI, Anthropic, z.ai, and so on -- instead of carrying its own
+rrlm runs whatever models Pi is already configured with (local servers,
+OpenRouter, OpenAI, Anthropic, z.ai, and so on) instead of carrying its own
 model registry. This module reads Pi's config files and turns a model reference
 into the connection details a ``dspy.LM`` needs.
 
@@ -14,8 +14,8 @@ Pi config locations (override the agent dir with ``$PI_CODING_AGENT_DIR``)::
 
 A reference is ``provider/model`` (``openrouter/qwen/qwen3.6-27b``), a bare model
 id (``glm-5``), or ``None`` to use Pi's current default. Key resolution follows
-Pi's order -- ``auth.json`` entry, then environment variable, then the
-``models.json`` ``apiKey`` -- and understands Pi's key formats: a literal string,
+Pi's order (``auth.json`` entry, then environment variable, then the
+``models.json`` ``apiKey``) and understands Pi's key formats: a literal string,
 a ``$VAR`` / ``VAR`` environment reference, or a ``!command`` whose stdout is the
 key. ``auth.json`` is read only to resolve credentials; its contents are never
 logged.

@@ -43,7 +43,7 @@ def run_eval(
     ok, detail = check(answer)
     print(f"[{name}] answer: {answer[:200]!r}")
     print(
-        f"[{name}] {'PASS' if ok else 'FAIL'} -- {detail} | "
+        f"[{name}] {'PASS' if ok else 'FAIL'}, {detail} | "
         f"model={result['config']['main_model']} calls={usage['calls']} "
         f"tokens={usage['prompt_tokens']}+{usage['completion_tokens']} "
         f"cost=${usage['cost_usd']:.4f} wall={result['wall_clock_s']}s "

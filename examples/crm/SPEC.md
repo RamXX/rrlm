@@ -1,14 +1,14 @@
-# LadyCRM -- a graph-native CRM CLI (build specification)
+# LadyCRM, a graph-native CRM CLI (build specification)
 
 You are building **LadyCRM**, a command-line CRM written in Go, backed by
 **LadybugDB** (an embeddable property-graph database). The whole point of using a
 graph DB is that CRM is fundamentally about **relationships that evolve over
-time** -- who works where (and when they moved), who introduced whom, every
+time**, who works where (and when they moved), who introduced whom, every
 interaction as a timestamped event, and how people connect us to accounts. Those
 are edges, not foreign keys.
 
 Follow this spec exactly. The build must stay green at every step
-(`make build` must pass). Do not invent APIs -- the LadybugDB Go API and build
+(`make build` must pass). Do not invent APIs, the LadybugDB Go API and build
 recipe are given below and a working skeleton is already in place.
 
 ## Hard constraints (do not change)
@@ -16,7 +16,7 @@ recipe are given below and a working skeleton is already in place.
 - Module: `ladycrm`. Single binary `crm`.
 - DB: LadybugDB via `github.com/LadybugDB/go-ladybug` (package `lbug`), already in
   `go.mod`. Build tag `system_ladybug` against the system library. The `Makefile`
-  already sets the CGO flags -- **always build with `make build`, never bare
+  already sets the CGO flags, **always build with `make build`, never bare
   `go build`**.
 - Go standard library only for everything else (flags via `flag`, CSV via
   `encoding/csv`). No web framework, no ORM, no extra deps unless already in
@@ -63,12 +63,12 @@ Node tables:
 - `Interaction(id STRING, at TIMESTAMP, channel STRING, summary STRING, PRIMARY KEY(id))`
 
 Rel tables (the temporal/relationship core):
-- `WorksAt(FROM Contact TO Company, role STRING, from_date TIMESTAMP, to_date TIMESTAMP)` -- role history; an open role has `to_date` unset/null.
-- `Introduced(FROM Contact TO Contact, at TIMESTAMP)` -- who introduced whom.
-- `ParticipatedIn(FROM Contact TO Deal, role STRING)` -- contact's role on a deal.
-- `DealFor(FROM Deal TO Company)` -- the account a deal is with.
-- `Had(FROM Contact TO Interaction)` -- a contact logged an interaction.
-- `About(FROM Interaction TO Company)` and `AboutDeal(FROM Interaction TO Deal)` -- optional subject of an interaction.
+- `WorksAt(FROM Contact TO Company, role STRING, from_date TIMESTAMP, to_date TIMESTAMP)`, role history; an open role has `to_date` unset/null.
+- `Introduced(FROM Contact TO Contact, at TIMESTAMP)`, who introduced whom.
+- `ParticipatedIn(FROM Contact TO Deal, role STRING)`, contact's role on a deal.
+- `DealFor(FROM Deal TO Company)`, the account a deal is with.
+- `Had(FROM Contact TO Interaction)`, a contact logged an interaction.
+- `About(FROM Interaction TO Company)` and `AboutDeal(FROM Interaction TO Deal)`, optional subject of an interaction.
 
 IDs are short ULIDs/uuids you generate (a helper is in the skeleton). Timestamps
 are RFC3339 strings passed as parameters.
@@ -102,12 +102,12 @@ Two commands analyze data too large to reason over directly. They **shell out to
 `rrlm-solve`** (the RLM-first backend; `rrlm-solve` is on PATH) instead of
 stuffing data into a prompt:
 
-- `crm import <contacts.csv>` -- bulk import. The CSV may have thousands of rows
+- `crm import <contacts.csv>`, bulk import. The CSV may have thousands of rows
   with dupes and messy fields. Pipe the CSV to `rrlm-solve` with an instruction to
   return a cleaned, de-duplicated JSON array of contacts (canonical name/email/
   company), then insert those via prepared statements. (`rrlm-solve -i "<instr>" -d @<csv> --json`,
   parse the `answer`.)
-- `crm report "<question>"` -- export the relevant graph (contacts, companies,
+- `crm report "<question>"`, export the relevant graph (contacts, companies,
   deals, interactions) as text/JSON, then `rrlm-solve -i "<question>" -d @<export>`
   and print the answer. Natural-language analytics over the whole CRM.
 

@@ -19,7 +19,7 @@ accuracy + wall-clock + tokens.
 |---|---|
 | `PROOF.md` | **the writeup**: tables, analysis, evidence, scoreboard |
 | `environment.txt` | exact hardware, model builds, library versions, context size |
-| `run_experiment.sh` | the **resumable** driver -- runs every (task x condition x size x seed x model) cell; skips any already in results.tsv |
+| `run_experiment.sh` | the **resumable** driver, runs every (task x condition x size x seed x model) cell; skips any already in results.tsv |
 | `results.tsv` | one row per cell: passed/status/wall/tokens/answer-vs-truth/run_id |
 | `summarize.py` | aggregates results.tsv + run artifacts into `PROOF_tables.md` and pulls the actual code the model wrote |
 | `PROOF_tables.md` | generated per-task tables + extracted code/errors |
@@ -32,7 +32,7 @@ accuracy + wall-clock + tokens.
 2. Serve the local models (see `environment.txt` for exact builds):
 
    ```bash
-   # leaf (DFlash :8771) -- the cheap fan-out model
+   # leaf (DFlash :8771): the cheap fan-out model
    ./scripts/local-serving/serve-models.sh start
    # orchestrator: Ornith-1.0-35B Q6_K (llama-server :8774). Single 65536 slot for
    # the proof's context wall (the experiment runs cells sequentially):
@@ -41,11 +41,11 @@ accuracy + wall-clock + tokens.
 
    These appear in Pi's `~/.pi/agent/models.json` as providers `ornith` and
    `supergemma` (rrlm resolves models from Pi config). The served context window is
-   **65536 tokens** -- the wall the experiment pushes data past. (For production /
+   **65536 tokens**, the wall the experiment pushes data past. (For production /
    parallel agents, drop `PARALLEL=1` to use continuous batching; see
    docs/LOCAL_SERVING.md.)
 
-3. Run the experiment (resumable -- appends to `results.tsv` as each cell finishes;
+3. Run the experiment (resumable, appends to `results.tsv` as each cell finishes;
    re-run to resume after any interruption, completed cells are skipped). Launch it
    detached so it survives background-task reaping:
 
@@ -64,11 +64,11 @@ accuracy + wall-clock + tokens.
 ## Run a single cell by hand
 
 ```bash
-# the model alone (baseline) -- fails to ingest large data
+# the model alone (baseline): fails to ingest large data
 python -m rrlm.bench.runner --task ledger --condition baseline --size 20000 \
   --model ornith/ornith-1.0-35b --reasoning off
 
-# the same model + RLM -- solves it
+# the same model + RLM: solves it
 python -m rrlm.bench.runner --task ledger --condition rlm --size 20000 \
   --model ornith/ornith-1.0-35b \
   --sub-model supergemma/Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2 --reasoning off

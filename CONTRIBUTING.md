@@ -6,7 +6,7 @@ Thanks for your interest. rrlm is small on purpose; keep changes narrow and atom
 
 ```bash
 uv sync
-make test      # unit tests -- no network, no Deno
+make test      # offline suite (no network, no Deno)
 make lint      # ruff
 ```
 
@@ -18,7 +18,7 @@ make lint      # ruff
 - Keep the public surface small: the product is `rrlm.solve` + the Pi backend in
   `pi/`. The benchmark harness lives under `src/rrlm/bench/` and must not leak into
   the product path.
-- Models are always resolved from Pi config via `rrlm.pi_config` -- never hardcode a
+- Models are always resolved from Pi config via `rrlm.pi_config`: never hardcode a
   model registry, endpoint, or absolute path.
 - No emojis in code, commits, or docs.
 
@@ -33,7 +33,7 @@ make eval-pi                 # end-to-end Pi delegation (needs pi + rrlm-solve)
 
 ## Working against a local predict-rlm checkout
 
-The published package depends on `predict-rlm` from PyPI. If you are hacking on both,
+rrlm depends on `predict-rlm` from PyPI. If you are hacking on both,
 point the dependency at a local checkout **without editing `pyproject.toml`**:
 
 ```bash

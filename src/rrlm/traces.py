@@ -1,8 +1,8 @@
-"""rrlm-traces -- inspect the predict-rlm RunTraces captured by rrlm-solve.
+"""rrlm-traces, inspect the predict-rlm RunTraces captured by rrlm-solve.
 
 When ``RRLM_TRACE_DIR`` is set, each rrlm-solve call writes a RunTrace JSON plus an
 ``index.jsonl`` line (instruction -> answer -> config). This CLI lists, reads, and
-greps those traces -- for debugging and for curating RLM-GEPA training sets.
+greps those traces, for debugging and for curating RLM-GEPA training sets.
 
     rrlm-traces list                      # one row per captured trace
     rrlm-traces read --last               # render the most recent trace

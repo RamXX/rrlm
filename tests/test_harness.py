@@ -1,4 +1,4 @@
-"""Harness construction tests -- no network calls."""
+"""Harness construction tests, no network calls."""
 
 from collections import Counter
 

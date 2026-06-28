@@ -1,5 +1,5 @@
 """Unit tests for rrlm.solve guardrails: hard wall-clock timeout + cap threading.
-Pure unit tests -- the heavy deps (model resolution, LM build, RLM run) are stubbed,
+Pure unit tests, the heavy deps (model resolution, LM build, RLM run) are stubbed,
 so no model/sandbox is needed."""
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import importlib
 import types
 
 # `import rrlm.solve as S` would bind the re-exported `solve` *function* (rrlm/__init__
-# exports it), not the module -- force the submodule so monkeypatch targets module globals.
+# exports it), not the module, force the submodule so monkeypatch targets module globals.
 S = importlib.import_module("rrlm.solve")
 
 

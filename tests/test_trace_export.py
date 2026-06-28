@@ -1,4 +1,4 @@
-"""Unit tests for rrlm.solve.export_trace -- the predict-rlm RunTrace capture
+"""Unit tests for rrlm.solve.export_trace, the predict-rlm RunTrace capture
 used to accumulate GEPA training traces. Pure unit tests (no model/sandbox):
 a stub prediction stands in for a real predict-rlm result."""
 from __future__ import annotations

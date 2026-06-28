@@ -10,7 +10,7 @@ Reproduce against a scratch DB:
   ./bin/crm --db /tmp/t.db link works-at --contact "$C" --company "$K" --role Eng
   ./bin/crm --db /tmp/t.db path --from "$C" --to "$K"
 
-BUG -- `path --from <contact> --to <company>` errors at runtime:
+BUG, `path --from <contact> --to <company>` errors at runtime:
   "prepare path: Binder exception: Expression in WITH must be aliased (use AS)."
 internal/store/path.go builds a Cypher variable-length path query with a WITH clause.
 LadybugDB requires every term projected by WITH to be aliased, and may not support the
@@ -21,6 +21,6 @@ human-readable result (a hop count or a short path string). Alias every WITH ter
 (e.g. `WITH a AS a, b AS b`) or avoid WITH entirely. Confirm the reproduce above prints
 a path/result (or a clean "no path") with NO Binder/Parser exception.
 
-Verify the API with `go doc github.com/LadybugDB/go-ladybug.Connection` -- do not guess.
+Verify the API with `go doc github.com/LadybugDB/go-ladybug.Connection`, do not guess.
 
 IRON RULE: one fix -> `make build` -> reproduce `path` -> stop when it runs cleanly.

@@ -111,7 +111,7 @@ eval-crm:
 
 # --- Optional local model servers (offline / $0 inference) ------------------
 # See docs/LOCAL_SERVING.md. Run each in its own terminal.
-# Orchestrator: Ornith-1.0-35B (Qwen3.5 MoE) on llama.cpp continuous batching -- the
+# Orchestrator: Ornith-1.0-35B (Qwen3.5 MoE) on llama.cpp continuous batching, the
 # settled top model (Track C): correct on all RLM task types (full superpowers proof
 # re-runs green on Ornith), ~5-8x faster end-to-end than a dense 27B, scales under
 # parallel agents. The only orchestrator now; pair it with the supergemma leaf.
@@ -131,5 +131,5 @@ serve-stop:
 serve-purge:
 	./scripts/local-serving/purge-dflash-cache.sh
 
-# (The Track C DFlash-vs-MTP decode bake-off target was removed -- its Qwen/pi-tune
+# (The Track C DFlash-vs-MTP decode bake-off target was removed, its Qwen/pi-tune
 # weights were purged. The investigation record lives in experiments/dflash-vs-mtp/.)

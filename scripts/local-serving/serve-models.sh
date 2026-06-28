@@ -28,7 +28,7 @@ DRAFT_QUANT="${DRAFT_QUANT:-w8:gs64}"
 RUN="${RUN:-/tmp/llm-servers}"
 mkdir -p "$RUN"
 
-# Directory of this script -- used to find the cache-purge helper.
+# Directory of this script, used to find the cache-purge helper.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # name | port | target (HF repo id or local path) | DFlash draft. All env-overridable.
@@ -110,7 +110,7 @@ case "$cmd" in
     ;;
   stop)
     _stop_one heretic; _stop_one supergemma
-    # Servers are down -- reclaim the (regenerable) DFlash prefix cache.
+    # Servers are down, reclaim the (regenerable) DFlash prefix cache.
     "$SCRIPT_DIR/purge-dflash-cache.sh" || true ;;
   restart)
     # Stop in-place WITHOUT purging: a restart keeps the prefix cache on disk so

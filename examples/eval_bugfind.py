@@ -2,7 +2,7 @@
 
 Loads rrlm's own Python sources (a genuine multi-file codebase, not synthetic
 template data) into the harness and asks a "find the one function that does X"
-question -- the same shape as the bugfind task, over real code. The answer is a
+question, the same shape as the bugfind task, over real code. The answer is a
 specific, verifiable code fact, so a model cannot guess it without actually
 reading across the files in the REPL.
 

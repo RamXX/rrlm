@@ -1,13 +1,13 @@
-# RLM-superpower matrix -- results
+# RLM-superpower matrix, results
 
-## bugfind -- ornith
+## bugfind, ornith
 
 | size | seed | condition | passed | status | wall_s | prompt_tok | detail |
 |---|---|---|---|---|---|---|---|
 | 60 | 42 | baseline | True | completed | 4.76 | 2372 | matched fn_040_sum_to |
 | 60 | 42 | rlm | True | completed | 54.93 | 33967 | matched fn_040_sum_to |
 
-## imdb -- ornith
+## imdb, ornith
 
 | size | seed | condition | passed | status | wall_s | prompt_tok | detail |
 |---|---|---|---|---|---|---|---|
@@ -17,7 +17,7 @@
 | 1500 | 42 | baseline | False | error | 0.63 | 0 | no answer |
 | 1500 | 42 | rlm | True | completed | 757.39 | 331912 | matched P205 (neg fraction 0.67) |
 
-## ledger -- ornith
+## ledger, ornith
 
 | size | seed | condition | passed | status | wall_s | prompt_tok | detail |
 |---|---|---|---|---|---|---|---|
@@ -64,7 +64,7 @@
 | 20000 | 42 | baseline | False | error | 0.75 | 0 | no answer |
 | 20000 | 42 | rlm | True | completed | 43.72 | 31457 | matched expected 115797.87 |
 
-## needle -- ornith
+## needle, ornith
 
 | size | seed | condition | passed | status | wall_s | prompt_tok | detail |
 |---|---|---|---|---|---|---|---|

@@ -4,7 +4,7 @@ description: >-
   Decide when to delegate a data-heavy subtask to the rlm_solve tool (the
   RLM-first harness) instead of reading data into your own context. Use when
   a task involves a large data payload, exact aggregation or exhaustive search
-  over many items, or per-item semantic judgment at scale -- e.g. "which
+  over many items, or per-item semantic judgment at scale, e.g. "which
   product has the most negative reviews across 5000 reviews", "sum the ok
   transactions for user X in this 50k-line ledger", "find the one buggy
   function in this module". Do NOT use it for small data you can simply read.
@@ -13,7 +13,7 @@ description: >-
 # RLM-first delegation
 
 You have an `rlm_solve` tool backed by a recursive-language-model harness. It
-loads a data payload into a sandboxed REPL -- **not your context** -- writes
+loads a data payload into a sandboxed REPL, **not your context**, writes
 code to probe it, fans out cheap sub-model calls only for irreducible semantic
 judgment, verifies, and returns an answer. This lets you handle data far larger
 than your context window, and stay correct on exact computation that
@@ -23,28 +23,28 @@ free-form reading gets wrong.
 
 Delegate when ANY of these hold:
 
-- **Data exceeds (or strains) your context** -- a file or blob too large to
+- **Data exceeds (or strains) your context**, a file or blob too large to
   read comfortably. The harness's cost and reliability are flat in data size.
-- **Exactness over many items** -- counting, summing, exhaustive search, or
+- **Exactness over many items**, counting, summing, exhaustive search, or
   "find the one X among N". Reading-and-reasoning silently miscounts at scale;
   code in the REPL does not.
-- **Per-item semantic judgment at scale** -- e.g. classify N free-text items
+- **Per-item semantic judgment at scale**, e.g. classify N free-text items
   then aggregate. The harness fans out cheap sub-model calls and aggregates
   mechanically.
 
 Pass the FULL data (inline via `data`, or `data_path` for a file on disk).
-Never pre-summarize or truncate it -- defeating the purpose. Make the
+Never pre-summarize or truncate it, defeating the purpose. Make the
 `instruction` specific and answerable from the data alone.
 
 ## When NOT to delegate
 
-- **Small data you can just read** -- if it fits comfortably in context and the
+- **Small data you can just read**, if it fits comfortably in context and the
   task is a direct read or a single judgment, read it yourself. The harness has
   fixed scaffold overhead (~15-25k tokens, several REPL turns) that is not worth
   paying for small inputs.
-- **No data payload** -- pure reasoning, code authoring, or conversation. Handle
+- **No data payload**, pure reasoning, code authoring, or conversation. Handle
   it directly.
-- **You need to keep reasoning over the data afterward** -- `rlm_solve` returns
+- **You need to keep reasoning over the data afterward**, `rlm_solve` returns
   an answer, not the loaded data. If you need iterative back-and-forth over the
   same large payload, call it once with a precise instruction.
 

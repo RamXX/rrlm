@@ -2,7 +2,7 @@
 # Drive ONE Pi build pass against a local orchestrator model, with the rrlm
 # rlm-backend extension + rlm-first skill loaded so the agent can delegate
 # data-heavy work to rlm_solve. State lives on disk (--no-session), so each pass
-# re-reads the current code -- ideal for small-context local models.
+# re-reads the current code, ideal for small-context local models.
 #
 # Usage: drive.sh <model-ref> <run-dir> <prompt-file>
 #   model-ref  e.g. qwen-official/mlx-community/Qwen3.6-27B-8bit  (a Pi model ref)

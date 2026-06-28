@@ -4,7 +4,7 @@
 # DFlash writes a speculative-decoding prefix/KV cache under
 #   ${XDG_CACHE_HOME:-$HOME/.cache}/dflash      (observed: .../dflash/prefix_l2)
 # which grows to tens of GB across long serving sessions. The cache is pure
-# derived state -- deleting it costs only a cold-start re-warm -- so we drop it
+# derived state, deleting it costs only a cold-start re-warm, so we drop it
 # whenever the local LLM servers are brought DOWN, to reclaim disk. It refills
 # on its own as soon as the servers come back up and start handling prompts.
 #

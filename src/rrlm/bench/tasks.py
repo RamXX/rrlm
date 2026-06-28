@@ -23,7 +23,7 @@ def make_ledger_task(size: int = 2000, seed: int = 42) -> Task:
     """Synthetic transaction ledger; the answer requires exact aggregation.
 
     Plants transactions for a target user among noise lines. The correct answer
-    is the sum of 'ok'-status amounts for that user -- trivially checkable, and
+    is the sum of 'ok'-status amounts for that user, trivially checkable, and
     big enough at scale that context-stuffing degrades while REPL code does not.
     """
     rng = random.Random(seed)
@@ -114,7 +114,7 @@ _FILLER = [
 
 def make_needle_task(size: int = 2000, seed: int = 42) -> Task:
     """Semantic needle: exactly one sentence states (in paraphrase) where the
-    target person lives now. Keyword grep is unreliable -- other people also
+    target person lives now. Keyword grep is unreliable, other people also
     relocate, and the target person appears in many non-residence contexts."""
     rng = random.Random(seed)
     target_person = rng.choice(_PEOPLE)

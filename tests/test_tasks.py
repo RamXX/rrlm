@@ -143,7 +143,7 @@ def test_bugfind_checker_handles_four_digit_indices():
 def test_bugfind_module_compiles_and_buggy_differs():
     task = make_bugfind_task(size=40, seed=8)
     namespace: dict = {}
-    exec(compile(task.data, "<bugfind>", "exec"), namespace)  # noqa: S102 -- our own generated source
+    exec(compile(task.data, "<bugfind>", "exec"), namespace)  # noqa: S102, our own generated source
     buggy = task.meta["buggy_function"]
     assert callable(namespace[buggy])
 

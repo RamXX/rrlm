@@ -1,10 +1,10 @@
 // rlm-backend: registers an `rlm_solve` tool that delegates data-heavy subtasks
 // to the rrlm RLM-first harness (predict-rlm). The large data payload goes into
-// the harness REPL, never into Pi's context window -- which is the entire point.
+// the harness REPL, never into Pi's context window, which is the entire point.
 //
 // Models come from your Pi config: by default the harness orchestrates with the
 // SAME model Pi is currently using (read from the tool's execution context), and
-// resolves credentials/endpoints from ~/.pi/agent/ -- local, OpenRouter, OpenAI,
+// resolves credentials/endpoints from ~/.pi/agent/, local, OpenRouter, OpenAI,
 // Anthropic, z.ai, etc. Override per the env table below.
 //
 // Install (one of):
@@ -54,7 +54,7 @@ export default function (pi: ExtensionAPI) {
       "irreducible semantic judgment, verifies, and returns the answer. Use " +
       "when the data is large, exact aggregation/search over many items is " +
       "required, or per-item semantic judgment is needed at scale. For small " +
-      "data you can read directly, do NOT use this -- read it yourself.",
+      "data you can read directly, do NOT use this, read it yourself.",
     promptGuidelines:
       "Pass the FULL data via `data` (or `data_path` for a file on disk); never " +
       "pre-summarize it. Keep `instruction` specific and answerable from the data.",
