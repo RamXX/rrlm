@@ -43,7 +43,10 @@ Never pre-summarize or truncate it, defeating the purpose. Make the
   fixed scaffold overhead (~15-25k tokens, several REPL turns) that is not worth
   paying for small inputs.
 - **No data payload**, pure reasoning, code authoring, or conversation. Handle
-  it directly.
+  it directly. Exception: if the `rlm_solve` tool description says web access is
+  enabled, delegate factual or current-events questions you cannot answer with
+  certainty (or that need a cited source URL) to it, even with no data, it will
+  search the live web, fetch the source, and verify.
 - **You need to keep reasoning over the data afterward**, `rlm_solve` returns
   an answer, not the loaded data. If you need iterative back-and-forth over the
   same large payload, call it once with a precise instruction.

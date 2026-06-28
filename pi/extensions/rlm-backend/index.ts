@@ -56,10 +56,22 @@ export default function (pi: ExtensionAPI) {
       "irreducible semantic judgment, verifies, and returns the answer. Use " +
       "when the data is large, exact aggregation/search over many items is " +
       "required, or per-item semantic judgment is needed at scale. For small " +
-      "data you can read directly, do NOT use this, read it yourself.",
+      "data you can read directly, do NOT use this, read it yourself." +
+      (WEB
+        ? " WEB ACCESS IS ENABLED: this harness can also research the LIVE WEB " +
+          "(it has web_search and fetch tools and will search, fetch the source, " +
+          "extract, and verify). Use it for factual or current-events questions " +
+          "you cannot answer with certainty from memory, or whenever a cited " +
+          "source URL is required, even with NO data payload. Prefer delegating " +
+          "such lookups here over answering them from memory."
+        : ""),
     promptGuidelines:
       "Pass the FULL data via `data` (or `data_path` for a file on disk); never " +
-      "pre-summarize it. Keep `instruction` specific and answerable from the data.",
+      "pre-summarize it. Keep `instruction` specific and answerable from the data." +
+      (WEB
+        ? " For a live web lookup, leave data empty and put the question in " +
+          "`instruction` (ask it to cite the source URL)."
+        : ""),
     parameters: Type.Object({
       instruction: Type.String({
         description: "What to accomplish, answerable from the data alone.",
