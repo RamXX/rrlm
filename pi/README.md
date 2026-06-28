@@ -7,12 +7,12 @@ context.
 
 ## Pieces
 
-- `extensions/rlm-backend/index.ts` -- registers the `rlm_solve` tool. It stages
+- `extensions/rlm-backend/index.ts` registers the `rlm_solve` tool. It stages
   the data to a temp file and shells out to `rrlm-solve --json`, returning the
   verified answer plus usage metrics. By default it orchestrates with the **same
   model Pi is currently using** (read from the tool's execution context) and
   resolves endpoints/credentials from your Pi config.
-- `skills/rlm-first/SKILL.md` -- teaches the agent *when* to delegate: large
+- `skills/rlm-first/SKILL.md` teaches the agent *when* to delegate: large
   data, exact aggregation/search over many items, or per-item semantic judgment
   at scale; and when not to (small data it can just read).
 
@@ -29,7 +29,7 @@ rrlm-solve -i "..." -d @data.txt --json   # full result incl. metrics
 ```
 
 Models are **Pi model references** (`provider/model`, or a bare model id) resolved
-from `~/.pi/agent/` -- local, OpenRouter, OpenAI, Anthropic, z.ai, etc. Omit
+from `~/.pi/agent/`: local, OpenRouter, OpenAI, Anthropic, z.ai, etc. Omit
 `--main` to use the model Pi is set to; `--sub` defaults to the same model (point
 it at a cheaper non-thinking model to make the fan-out path inexpensive).
 
@@ -68,7 +68,7 @@ it at a cheaper non-thinking model to make the fan-out path inexpensive).
 ## Verified
 
 End-to-end: pi calls `rlm_solve`, the harness runs against the model Pi is using,
-and the answer returns -- confirmed via json-mode `tool_execution_start` /
+and the answer returns, confirmed via json-mode `tool_execution_start` /
 `tool_execution_end` events (see `examples/eval_pi.py`). The extension's `execute`
 signature is version-robust (it detects the AbortSignal and the execution context
 by shape) across recent pi releases.
