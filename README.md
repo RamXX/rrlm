@@ -73,7 +73,38 @@ uv tool install .        # optional: install the rrlm-solve / rrlm-traces CLIs
 
 ## Use it
 
-### As a CLI / library
+### Code with Pi, interactively (the main use)
+
+[Pi](https://github.com/earendil-works/pi) is an interactive coding agent in your
+terminal, the same shape you already know from Claude Code: you describe what you want
+and it reads files, writes code, runs commands, reads the errors, and fixes them. rrlm
+plugs in so you can drive that loop with a small **local** model (or any model), keeping
+the code-first, run-it, verify posture this repo is about. Launch Pi with the extension
+and skill loaded:
+
+```bash
+pi -e /path/to/rrlm/pi/extensions/rlm-backend/index.ts \
+   --skill /path/to/rrlm/pi/skills/rlm-first
+```
+
+Then just talk to it: "add a `--json` flag and a test for it", "find and fix the failing
+case", "build a graph CRM from this spec". It works file by file, compiles, and
+self-corrects, the exact loop that produced [**examples/crm**](examples/crm), where a
+35B local model built a complete Go CRM in about 12 minutes, fixing its own bugs, with
+minimal data and context. Point Pi at a local orchestrator for $0, fully private coding
+(see [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md)).
+
+Alongside the coding loop, the agent also gets an `rlm_solve` tool plus a skill that
+tells it *when* to reach for it (large data, exact aggregation or search over many items,
+per-item judgment at scale) and when not to (small data it can just read), so a
+data-heavy subtask stays exact and cheap without derailing the work. By default
+`rlm_solve` orchestrates with the model Pi is currently using. Details in
+[pi/README.md](pi/README.md).
+
+### As a CLI / library (data tasks, scripting)
+
+When you want the RLM data capability directly, without the agent, use the `rrlm-solve`
+CLI or the Python library:
 
 ```bash
 # inline / file / stdin; models default to your Pi config
@@ -88,30 +119,6 @@ from rrlm import solve
 result = solve("Which product id has the most negative reviews?", data=text)
 print(result["answer"], result["usage"]["cost_usd"])
 ```
-
-### As a Pi backend (the main event)
-
-Wire the extension + skill into Pi so the agent delegates data-heavy subtasks
-automatically. See [pi/README.md](pi/README.md). In short:
-
-```bash
-pi -e /path/to/rrlm/pi/extensions/rlm-backend/index.ts \
-   --skill /path/to/rrlm/pi/skills/rlm-first
-```
-
-The agent gets an `rlm_solve` tool and a skill telling it *when* to use it (large
-data, exact aggregation/search over many items, per-item judgment at scale) and
-when not to (small data it can just read). By default `rlm_solve` orchestrates with
-the same model Pi is currently using.
-
-### Generate code with it (the headline use)
-
-The same posture drives *building software*: a local model writes code one file at a
-time, compiles, reads the error, fixes, and iterates, delegating to `rlm_solve` only
-for the rare data-heavy subtask. [**examples/crm**](examples/crm) is the worked proof:
-a 35B model on a laptop builds a complete graph CRM in Go in ~12 minutes, self-fixing
-its own bugs, with minimal data/context. That is the capability this repo exists to
-demonstrate.
 
 ## How the harness decides
 

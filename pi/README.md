@@ -36,10 +36,11 @@ it at a cheaper non-thinking model to make the fan-out path inexpensive).
 ## Install into pi
 
 1. Install rrlm so `rrlm-solve` is on your PATH (and Deno is available for the
-   default jspi sandbox):
+   default jspi sandbox). rrlm is not on a package index; install from source:
 
    ```bash
-   uv tool install rrlm        # or: pipx install rrlm
+   curl -fsSL https://raw.githubusercontent.com/RamXX/rrlm/main/install.sh | bash
+   # or from a checkout: git clone https://github.com/RamXX/rrlm && cd rrlm && uv tool install .
    ```
 
    For development from a checkout, set `RRLM_DIR` instead (the extension then
