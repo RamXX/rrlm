@@ -1,12 +1,12 @@
 # rrlm
 
-An **RLM-first backend for the [Pi coding agent](https://github.com/earendil-works/pi)** --
+An **RLM-first backend for the [Pi coding agent](https://github.com/earendil-works/pi)**,
 and a demonstration that the Recursive Language Model (RLM) is a **posture for quality
 work, not just a trick for huge context.**
 
 Most RLM work fixates on cramming data bigger than the context window into a REPL.
-That's real, but it misses the point. RLM is **code-first and verify** -- write code,
-run it, read the result, fix, iterate -- instead of emitting an answer in one stochastic
+That's real, but it misses the point. RLM is **code-first and verify** (write code,
+run it, read the result, fix, iterate) instead of emitting an answer in one stochastic
 shot. That posture makes even a **small local model generate quality software.**
 
 We prove it two ways:
@@ -18,10 +18,10 @@ We prove it two ways:
    verify, iterate loop, not a big prompt. See **[examples/crm](examples/crm)**.
 2. **Data beyond context (the usual RLM story).** Exact computation over data far larger
    than the window: the agent writes code to probe a sandboxed REPL, fans out cheap
-   sub-model calls only for irreducible semantic judgment, and verifies -- keeping a
+   sub-model calls only for irreducible semantic judgment, and verifies, keeping a
    *map* of state in context, not the state itself. Context-stuffing silently miscounts
    long before it hits the limit; the RLM stays exact and cheap as data grows (a
-   1M-token task on a 262K-context model is impossible to stuff -- the RLM does it for
+   1M-token task on a 262K-context model is impossible to stuff, the RLM does it for
    under a cent). See [docs/FINDINGS.md](docs/FINDINGS.md) and
    [experiments/superpowers](experiments/superpowers).
 
@@ -32,26 +32,40 @@ library (`from rrlm import solve`). Built on [`predict-rlm`](https://pypi.org/pr
 
 rrlm does **not** keep its own model registry. It resolves models from your Pi
 config (`~/.pi/agent/models.json`, `settings.json`, `auth.json`, and
-`~/.pi/config.json`) -- local servers, OpenRouter, OpenAI, Anthropic, z.ai,
+`~/.pi/config.json`): local servers, OpenRouter, OpenAI, Anthropic, z.ai,
 whatever you have configured. A model reference is `provider/model` (e.g.
 `openrouter/qwen/qwen3.6-27b`, `lmstudio/qwen/qwen3.6-27b`) or a bare model id; omit
 it to use the model Pi is currently set to.
 
 ## Install
 
+rrlm is not published to a package index. Install it from source.
+
+One-line install (clones into `~/.rrlm`, sets up the virtualenv, and puts the
+`rrlm-solve` and `rrlm-traces` commands on your PATH via `uv`):
+
 ```bash
-uv tool install rrlm          # or: pipx install rrlm
+curl -fsSL https://raw.githubusercontent.com/RamXX/rrlm/main/install.sh | bash
 ```
 
-You also need [Deno](https://deno.land) for the default Pyodide sandbox (`jspi`
-backend), and either a model configured in Pi or an `OPENROUTER_API_KEY`.
-
-From a checkout for development:
+Or do it by hand:
 
 ```bash
 git clone https://github.com/RamXX/rrlm && cd rrlm
-uv sync
+uv sync                  # development: run via `make` / `uv run`
+uv tool install .        # optional: install the rrlm-solve / rrlm-traces CLIs
 ```
+
+### Prerequisites
+
+- [`uv`](https://docs.astral.sh/uv/), the Python package manager this project uses.
+  Install with `curl -LsSf https://astral.sh/uv/install.sh | sh` (the one-line
+  installer above bootstraps `uv` for you if it is missing).
+- [Deno](https://deno.land), only if you use the default Pyodide sandbox (the `jspi`
+  backend). Install with `curl -fsSL https://deno.land/install.sh | sh`, or `brew
+  install deno`, or follow the [Deno install guide](https://docs.deno.com/runtime/getting_started/installation/).
+  The `supervisor` backend (the `rrlm-solve` default) needs no Deno.
+- A model configured in Pi (see below), or an `OPENROUTER_API_KEY`.
 
 ## Use it
 
@@ -89,7 +103,7 @@ the same model Pi is currently using.
 ### Generate code with it (the headline use)
 
 The same posture drives *building software*: a local model writes code one file at a
-time, compiles, reads the error, fixes, and iterates -- delegating to `rlm_solve` only
+time, compiles, reads the error, fixes, and iterates, delegating to `rlm_solve` only
 for the rare data-heavy subtask. [**examples/crm**](examples/crm) is the worked proof:
 a 35B model on a laptop builds a complete graph CRM in Go in ~12 minutes, self-fixing
 its own bugs, with minimal data/context. That is the capability this repo exists to
@@ -106,14 +120,14 @@ defaults to off (it adds latency and variance without accuracy here); point the 
 
 ## Guardrails, traces, and sandbox isolation
 
-All of these live at the rrlm layer (within predict-rlm's constructs -- nothing patches
+All of these live at the rrlm layer (within predict-rlm's constructs; nothing patches
 predict-rlm):
 
 - **Guardrails** (hard ceilings): `--timeout` (env `RRLM_TIMEOUT`) caps total
   wall-clock and cancels an overrunning run; `--max-llm-calls` caps sub-LM calls (the
   de-facto spend ceiling); `--max-iterations` caps REPL turns.
 - **Traces for optimization**: set `RRLM_TRACE_DIR` and every `rlm_solve` call writes
-  its predict-rlm RunTrace plus an `index.jsonl` (instruction -> answer -> config) --
+  its predict-rlm RunTrace plus an `index.jsonl` (instruction -> answer -> config),
   the dataset for [RLM-GEPA](https://pypi.org/project/predict-rlm/). Inspect and curate
   with `rrlm-traces list`, `rrlm-traces read --last`, `rrlm-traces grep <pattern>`.
 - **Execution sandbox** (`RRLM_BACKEND`): `supervisor` (host CPython, default, fastest),
