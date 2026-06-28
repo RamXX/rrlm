@@ -15,6 +15,7 @@
 //   RRLM_MAIN     orchestrator model ref (Pi 'provider/model'); default: Pi's current model
 //   RRLM_SUB      leaf model ref for predict() fan-out; default: same as main
 //   RRLM_BACKEND  sandbox backend: 'jspi' (default), 'sbx', or 'supervisor'
+//   RRLM_WEB      '1' to give the agent live web retrieval (needs the rrlm 'web' extra)
 //   RRLM_DIR      project checkout to run via `uv run` (dev mode); unset = installed rrlm-solve
 
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -26,6 +27,7 @@ import { Type } from "@sinclair/typebox";
 
 const RRLM_DIR = process.env.RRLM_DIR;
 const BACKEND = process.env.RRLM_BACKEND ?? "jspi";
+const WEB = /^(1|true|yes|on)$/i.test(process.env.RRLM_WEB ?? "");
 
 // Best-effort: turn Pi's current Model object into an rrlm model reference
 // (provider/id). Defensive about the provider field shape across pi versions.
@@ -104,6 +106,7 @@ export default function (pi: ExtensionAPI) {
         ...(mainRef ? ["--main", mainRef] : []),
         ...(subRef ? ["--sub", subRef] : []),
         "--backend", BACKEND,
+        ...(WEB ? ["--web"] : []),
         "--json",
       ];
       // Installed: call rrlm-solve on PATH. Dev: run it inside the checkout via uv.

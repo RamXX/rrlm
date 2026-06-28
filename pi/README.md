@@ -63,6 +63,7 @@ it at a cheaper non-thinking model to make the fan-out path inexpensive).
 | `RRLM_MAIN` | Pi's current model | orchestrator model reference (`provider/model`) |
 | `RRLM_SUB` | same as `RRLM_MAIN` | leaf model reference for `predict()` fan-out |
 | `RRLM_BACKEND` | `jspi` | sandbox backend (`jspi`, `sbx`, or `supervisor`) |
+| `RRLM_WEB` | unset | `1` to give the agent live web retrieval (`web_search`/`fetch`); needs the rrlm `web` extra |
 | `RRLM_DIR` | unset (use installed `rrlm-solve`) | project checkout to run via `uv run` |
 
 ## Verified

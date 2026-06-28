@@ -50,7 +50,7 @@ dagger functions # list the available functions
 A green run ends with the coverage table and:
 
 ```
-Required test coverage of 80% reached. Total coverage: 98.03%
+Required test coverage of 80% reached. Total coverage: 97.02%
 ```
 
 ## How any CI provider uses it

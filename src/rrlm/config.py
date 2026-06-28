@@ -39,6 +39,10 @@ class HarnessConfig:
     # Per-turn action-generation re-asks on a parse/validation failure. Only
     # applied when the installed predict-rlm supports it (feature-detected).
     max_action_retries: int = 0
+    # Give the agent live web retrieval (host-side web_search/fetch tools + a
+    # doctrine to retrieve-and-verify instead of answering from memory). Opt-in;
+    # needs the optional 'web' extra (ddgs + trafilatura). See rrlm.webtools.
+    web: bool = False
 
     def as_dict(self) -> dict:
         return asdict(self)

@@ -38,3 +38,24 @@ Failure discipline:
 
 def doctrine_skill() -> Skill:
     return Skill(name="rlm-first-doctrine", instructions=DOCTRINE)
+
+
+WEB_DOCTRINE = """\
+You have live web access through two host-side tools, callable from the REPL:
+- await web_search(query, max_results=5) -> ranked results (title, url, snippet)
+- await fetch(url, max_chars=8000) -> the cleaned main text of a page
+
+Use them for any factual or time-sensitive question whose answer you are not
+certain is both correct and current. Do NOT answer such questions from memory.
+The loop is: 1. web_search to find sources; 2. fetch the most authoritative hit;
+3. extract the specific fact with Python; 4. VERIFY it against a second source
+before SUBMIT. Cite the URL(s) you used in the answer. Both are awaitable and run
+on the host, so they work in every backend; batch independent fetches with
+asyncio.gather. They return an error string on failure, so check the result
+rather than assuming success. For small inputs already given in `data`, or facts
+that are stable and you are certain of, you do not need the web.
+"""
+
+
+def web_skill() -> Skill:
+    return Skill(name="rlm-web-doctrine", instructions=WEB_DOCTRINE)

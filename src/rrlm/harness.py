@@ -154,13 +154,24 @@ def build_rlm(
     if depth < cfg.max_depth:
         tools.append(_make_rlm_spawn(cfg, main_lm, sub_lm, depth, spawn_stats))
 
+    skills = [doctrine_skill()]
+    if cfg.web:
+        # Host-side web tools work in every backend (predict-rlm bridges tool
+        # calls to the host). The web doctrine tells the agent to retrieve and
+        # verify instead of answering from memory.
+        from rrlm.playbooks import web_skill
+        from rrlm.webtools import web_tools
+
+        tools.extend(web_tools())
+        skills.append(web_skill())
+
     # Backend selection. "supervisor" (0.7) runs real local CPython with no
     # Deno/WASM bridge (fastest for wide local fan-out and no JSPI hang) and
     # is passed as interpreter= (mutually exclusive with sandbox_backend).
     rlm_kwargs: dict = dict(
         lm=main_lm,
         sub_lm=sub_lm,
-        skills=[doctrine_skill()],
+        skills=skills,
         tools=tools,
         max_iterations=cfg.max_iterations,
         max_llm_calls=cfg.max_llm_calls,
