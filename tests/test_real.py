@@ -1,10 +1,11 @@
-"""Real-use-case evals as pytest tests (excluded from the CI unit run).
+"""Real-use-case evals as pytest tests (excluded from the default + coverage runs).
 
-These need a configured model (and, for the Pi test, `pi` + `rrlm-solve`), so they
-are marked and skipped by ``pytest -m "not real and not integration"``.
+These need a live model (and, for the Pi test, `pi` + `rrlm-solve` + Deno), so they
+are all marked ``real`` and skipped by ``pytest -m "not real"``. The offline,
+stub-backed integration / e2e coverage lives in ``test_integration_solve.py`` and
+``test_e2e_cli.py`` (markers ``integration`` / ``e2e``), which DO run by default.
 
-    pytest -m real          # tabular aggregation + code reasoning
-    pytest -m integration   # end-to-end Pi delegation
+    pytest -m real          # tabular + code reasoning + Pi delegation (needs a model)
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ def test_bugfind_code_reasoning():
     assert eval_bugfind.main() == 0
 
 
-@pytest.mark.integration
+@pytest.mark.real
 def test_pi_end_to_end_delegation():
     import eval_pi
 

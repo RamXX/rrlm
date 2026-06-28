@@ -59,3 +59,14 @@ def test_noop_without_trace_dir():
 def test_noop_when_prediction_has_no_trace(tmp_path):
     assert export_trace(_StubPrediction(trace=None), trace_dir=str(tmp_path)) is None
     assert not (tmp_path / "index.jsonl").exists()
+
+
+class _ExplodingTrace:
+    def to_exportable_json(self) -> str:
+        raise RuntimeError("export blew up")
+
+
+def test_export_is_best_effort_on_failure(tmp_path):
+    # Trace capture must never break solve(): a raising exporter yields None.
+    pred = _StubPrediction(_ExplodingTrace())
+    assert export_trace(pred, trace_dir=str(tmp_path)) is None

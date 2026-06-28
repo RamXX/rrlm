@@ -103,7 +103,44 @@ class TestFetchGeneration:
         assert route.call_count == 1
 
 
+class TestGetHelper:
+    def test_get_on_none_returns_default(self):
+        from rrlm.metrics import _get
+
+        assert _get(None, "x", "fallback") == "fallback"
+
+    def test_get_on_dict_and_object(self):
+        from rrlm.metrics import _get
+
+        assert _get({"a": 1}, "a") == 1
+        assert _get(SimpleNamespace(b=2), "b") == 2
+
+
+class TestFetchGenerationErrors:
+    @respx.mock
+    def test_http_error_is_swallowed_and_returns_none(self):
+        # A transport error on every attempt exhausts retries and yields None
+        # (covers the httpx.HTTPError branch and the nonzero-delay sleep path).
+        respx.get(GENERATION_URL).mock(side_effect=httpx.ConnectError("boom"))
+        assert fetch_generation("gen-x", "key", retry_delays=(0.01,)) is None
+
+
 class TestReconcile:
+    def test_second_pass_fills_records_missed_on_first_pass(self, monkeypatch):
+        # First fetch attempt misses (record not yet written), the delayed second
+        # pass succeeds -- the exact path real long generations exercise.
+        calls = {"n": 0}
+
+        def fake_fetch(gen_id, api_key, *, client=None):
+            calls["n"] += 1
+            return None if calls["n"] == 1 else {"total_cost": 0.02}
+
+        monkeypatch.setattr("rrlm.metrics.fetch_generation", fake_fetch)
+        records = [CallRecord(role="main", gen_id="gen-late")]
+        filled = reconcile(records, "key", second_pass_delay_s=0.01)
+        assert filled == 1
+        assert records[0].cost_usd == 0.02
+
     @respx.mock
     def test_fills_authoritative_fields(self):
         respx.get(GENERATION_URL).mock(

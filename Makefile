@@ -24,15 +24,26 @@ RUNNER_ARGS = --model $(MAIN) --sub-model $(SUB) --reasoning $(REASONING) --seed
 INSTRUCTION ?= Which product id has the most negative reviews? Answer with the id only.
 DATA ?= -
 
-.PHONY: setup test lint smoke baseline compare report clean-runs \
+.PHONY: setup test cov coverage lint smoke baseline compare report clean-runs \
         solve pi-run eval-tabular eval-bugfind eval-pi eval-crm \
         serve-orch serve-leaf serve-stop serve-purge
 
 setup:
 	uv sync
 
+# Fast, fully offline run: unit + integration + e2e. The integration/e2e tests
+# drive a real local OpenAI-compatible stub server (a subprocess, no mocks, no
+# network, no GPU). Only `real` (live model / Pi) is excluded.
 test:
-	$(RUN) pytest -q -m "not real and not integration"
+	$(RUN) pytest -q -m "not real"
+
+# Same offline scope, measured for coverage; fails under 80% line coverage of
+# src/rrlm. This is the gate CI enforces.
+cov:
+	$(RUN) pytest -q -m "not real" \
+		--cov=src/rrlm --cov-report=term-missing --cov-fail-under=80
+
+coverage: cov
 
 lint:
 	$(RUN) ruff check src/ tests/ examples/

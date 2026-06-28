@@ -152,7 +152,110 @@ def test_response_schema_override(agent_dir: Path, monkeypatch):
     assert resolve_model("lmstudio/qwen/qwen3.6-27b", pi_dir=agent_dir).needs_json_schema is False
 
 
+def test_response_schema_override_force_on(agent_dir: Path, monkeypatch):
+    # Force the schema flag on for a server that otherwise would not need it.
+    monkeypatch.setenv("RRLM_RESPONSE_SCHEMA", "1")
+    assert resolve_model("omlx/gemma-4-31B", pi_dir=_write(agent_dir, models=_MODELS)).needs_json_schema is True
+
+
+def test_anthropic_api_kind_has_no_reasoning_toggle(agent_dir: Path):
+    models = {
+        "providers": {
+            "claudeish": {
+                "baseUrl": "https://example.test/v1",
+                "api": "anthropic-messages",
+                "apiKey": "k",
+                "models": [{"id": "m"}],
+            }
+        }
+    }
+    _write(agent_dir, models=models)
+    m = resolve_model("claudeish/m", pi_dir=agent_dir)
+    assert m.reasoning_style == "none"
+    assert m.litellm_id == "anthropic/m"
+
+
 def test_unresolvable_reference_raises(agent_dir: Path):
     _write(agent_dir, models={"providers": {}})
     with pytest.raises(ValueError, match="resolve"):
         resolve_model("nope-no-provider", pi_dir=agent_dir)
+
+
+def test_builtin_override_with_base_routing_and_model_overrides(agent_dir: Path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-1")
+    models = {
+        "providers": {
+            "openrouter": {
+                "baseUrl": "https://openrouter.ai/api/v1",
+                "models": [
+                    {
+                        "id": "qwen/q",
+                        "reasoning": True,
+                        "contextWindow": 200000,
+                        "maxTokens": 40000,
+                        "compat": {"openRouterRouting": {"order": ["fireworks"]}},
+                    }
+                ],
+                "modelOverrides": {"qwen/q": {"maxTokens": 8000}},
+            }
+        }
+    }
+    _write(agent_dir, models=models)
+    m = resolve_model("openrouter/qwen/q", pi_dir=agent_dir)
+    assert m.openrouter_routing == {"order": ["fireworks"]}
+    assert m.max_tokens == 8000  # modelOverrides wins
+    assert m.litellm_id == "openai/qwen/q"  # base override routes through openai/
+    assert m.supports_reasoning is True
+    assert m.is_openrouter is True
+
+
+def test_bare_id_falls_back_to_default_provider(agent_dir: Path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-2")
+    _write(agent_dir, models={"providers": {}}, settings={"defaultProvider": "openrouter"})
+    m = resolve_model("some-unlisted-model", pi_dir=agent_dir)
+    assert m.provider == "openrouter"
+    assert m.model_id == "some-unlisted-model"
+
+
+def test_no_model_and_no_default_raises(agent_dir: Path):
+    _write(agent_dir, models={"providers": {}})
+    with pytest.raises(ValueError, match="no model specified"):
+        resolve_model(None, pi_dir=agent_dir)
+
+
+def test_auth_json_plain_string_form(agent_dir: Path):
+    models = {
+        "providers": {
+            "zai": {
+                "baseUrl": "https://api.z.ai/v4",
+                "api": "openai-completions",
+                "apiKey": "ignored",
+                "models": [{"id": "glm-5"}],
+            }
+        }
+    }
+    _write(agent_dir, models=models, auth={"zai": "plain-auth-key"})
+    assert resolve_model("zai/glm-5", pi_dir=agent_dir).api_key == "plain-auth-key"
+
+
+def test_apikey_bare_env_name_form(agent_dir: Path, monkeypatch):
+    monkeypatch.setenv("MY_CUSTOM_KEY", "from-bare-env")
+    models = {
+        "providers": {
+            "custom": {
+                "baseUrl": "http://localhost:9100/v1",
+                "api": "openai-completions",
+                "apiKey": "MY_CUSTOM_KEY",  # bare env-var-name form
+                "models": [{"id": "m"}],
+            }
+        }
+    }
+    _write(agent_dir, models=models)
+    assert resolve_model("custom/m", pi_dir=agent_dir).api_key == "from-bare-env"
+
+
+def test_pi_agent_dir_env_override(monkeypatch, tmp_path):
+    from rrlm.pi_config import pi_agent_dir
+
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(tmp_path / "custom-agent"))
+    assert pi_agent_dir() == tmp_path / "custom-agent"

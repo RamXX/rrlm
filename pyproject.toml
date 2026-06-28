@@ -45,14 +45,16 @@ build-backend = "hatchling.build"
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
     "respx>=0.23.1",
     "ruff>=0.9.0",
 ]
 
 [tool.pytest.ini_options]
 markers = [
-    "real: end-to-end test that calls a live model (needs credentials / a served model)",
-    "integration: needs external tooling (Pi, Deno) and is excluded from CI unit runs",
+    "real: calls a live model or external tooling (Pi, real provider). Needs credentials / a served model / a GPU; excluded from the default and coverage runs.",
+    "integration: offline end-to-end run of the harness against the local OpenAI-compatible stub server (real subprocess, real sockets, no mocks, no network). Runs in the default and coverage runs.",
+    "e2e: offline end-to-end exercise of the rrlm-solve CLI and library entry point against the local stub server (no mocks, no network). Runs in the default and coverage runs.",
 ]
 
 [tool.ruff]

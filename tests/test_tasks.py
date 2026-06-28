@@ -146,3 +146,51 @@ def test_bugfind_module_compiles_and_buggy_differs():
     exec(compile(task.data, "<bugfind>", "exec"), namespace)  # noqa: S102 -- our own generated source
     buggy = task.meta["buggy_function"]
     assert callable(namespace[buggy])
+
+
+def test_imdb_returns_cached_pool_without_network(tmp_path):
+    from rrlm.bench.corpora import fetch_imdb_pool
+
+    cache = _fake_imdb_cache(tmp_path)
+    pool = fetch_imdb_pool(cache)
+    assert set(pool) == {"neg", "pos"}
+    assert pool["neg"] and pool["pos"]
+
+
+def test_corpora_clean_strips_html_and_whitespace_and_truncates():
+    from rrlm.bench.corpora import _clean
+
+    raw = "Great<br/>movie   with\n\nlots of   spaces. " + ("x" * 1000)
+    cleaned = _clean(raw, max_chars=50)
+    assert "<br" not in cleaned
+    assert "  " not in cleaned  # collapsed runs of whitespace
+    assert len(cleaned) == 50  # truncated to max_chars
+
+
+def test_fetch_imdb_pool_downloads_then_caches(tmp_path):
+    """Unit test of the HF fetch path with the datasets-server REST API mocked.
+
+    A unit test, so the network dependency is isolated with respx; the offline
+    benchmark tasks use a pre-seeded cache instead.
+    """
+    import httpx
+    import respx
+
+    from rrlm.bench import corpora
+
+    def handler(request):
+        offset = int(request.url.params["offset"])
+        label = 0 if offset < corpora._POS_OFFSET else 1
+        return httpx.Response(
+            200, json={"rows": [{"row": {"text": f"<br/>review {offset}", "label": label}}]}
+        )
+
+    cache = tmp_path / "pool.json"
+    with respx.mock:
+        respx.get(corpora._ROWS_URL).mock(side_effect=handler)
+        pool = corpora.fetch_imdb_pool(cache, per_class=2)
+        assert pool["neg"] and pool["pos"]
+        assert "<br" not in pool["neg"][0]  # cleaned on the way in
+        assert cache.exists()
+    # a second call is served entirely from the cache (no mock needed)
+    assert corpora.fetch_imdb_pool(cache, per_class=2) == pool
