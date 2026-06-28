@@ -17,3 +17,13 @@ data/
 .vault/.dispatcher-state.json
 .vault/.vlt.lock
 .vault/.guard/
+
+# rrlm session / local / regenerable artifacts
+.predict_rlm_sbx/
+.vault/
+CONTINUITY.md
+experiments/superpowers/evidence/
+experiments/superpowers/driver.log
+experiments/superpowers/PIPELINE_DONE
+*.bak.*
+*.err

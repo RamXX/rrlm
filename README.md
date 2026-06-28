@@ -86,6 +86,23 @@ working set is too large, and verify before answering. Orchestrator thinking
 defaults to off (it adds latency and variance without accuracy here); point the leaf
 (`--sub`) at a cheap non-thinking model to make the fan-out path inexpensive.
 
+## Guardrails, traces, and sandbox isolation
+
+All of these live at the rrlm layer (within predict-rlm's constructs -- nothing patches
+predict-rlm):
+
+- **Guardrails** (hard ceilings): `--timeout` (env `RRLM_TIMEOUT`) caps total
+  wall-clock and cancels an overrunning run; `--max-llm-calls` caps sub-LM calls (the
+  de-facto spend ceiling); `--max-iterations` caps REPL turns.
+- **Traces for optimization**: set `RRLM_TRACE_DIR` and every `rlm_solve` call writes
+  its predict-rlm RunTrace plus an `index.jsonl` (instruction -> answer -> config) --
+  the dataset for [RLM-GEPA](https://pypi.org/project/predict-rlm/). Inspect and curate
+  with `rrlm-traces list`, `rrlm-traces read --last`, `rrlm-traces grep <pattern>`.
+- **Execution sandbox** (`RRLM_BACKEND`): `supervisor` (host CPython, default, fastest),
+  `jspi` (Deno/Pyodide WASM, local, $0), or `sbx` (Docker Linux container, strongest
+  isolation; auto-reuses a warm container to keep per-call overhead low). See
+  [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
+
 ## Reproduce the benchmarks
 
 The research side lives in `src/rrlm/bench/` and writes per-run artifacts under

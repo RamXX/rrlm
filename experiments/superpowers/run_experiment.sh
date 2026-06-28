@@ -8,8 +8,11 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."   # rrlm root
 RUN="uv run -p $(cat .python-version) -- python -m rrlm.bench.runner"
-PITUNE="pitune/qwen3.6-27b-pi-tune"
-QWEN="qwen-official/mlx-community/Qwen3.6-27B-8bit"
+# Orchestrator: Ornith-1.0-35B (Qwen3.5 MoE) -- the settled top model (Track C).
+# Both the old PITUNE and QWEN slots now point here so the whole matrix runs on Ornith.
+ORCH="ornith/ornith-1.0-35b"
+PITUNE="$ORCH"
+QWEN="$ORCH"
 LEAF="supergemma/Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2"
 EXP="experiments/superpowers"
 OUT="$EXP/results.tsv"

@@ -1,0 +1,25 @@
+backend	task	size	seed	condition	passed	status	wall_s	prompt_tok	completion_tok	detail	run_id
+qwen-dflash	ledger	2000	42	rlm	True	completed	94.86	11608	445	matched expected 10143.63	20260628-012944_ledger-2000_qwen-official_rlm_dflash
+qwen-dflash	ledger	20000	42	rlm	True	completed	109.99	12007	588	matched expected 115797.87	20260628-013121_ledger-20000_qwen-official_rlm_dflash
+qwen-mlxlm	ledger	2000	42	rlm	True	completed	93.54	11621	497	matched expected 10143.63	20260628-013551_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+qwen-mlxlm	ledger	20000	42	rlm	True	completed	77.24	11800	622	matched expected 115797.87	20260628-013726_ledger-20000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+qwen-mlxlm-s2	ledger	2000	42	rlm	True	completed	51.18	11621	497	matched expected 10143.63	20260628-014015_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+qwen-mlxlm-s2	ledger	20000	42	rlm	True	completed	60.95	11800	622	matched expected 115797.87	20260628-014108_ledger-20000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+dflash-warmup	ledger	2000	42	rlm	True	completed	23.05	11608	445	matched expected 10143.63	20260628-014328_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+qwen-dflash-warm	ledger	2000	42	rlm	True	completed	23.15	11608	445	matched expected 10143.63	20260628-014353_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+qwen-dflash-warm	ledger	20000	42	rlm	True	completed	30.55	12007	588	matched expected 115797.87	20260628-014417_ledger-20000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+mlxlm-steady	ledger	2000	42	rlm	True	completed	113.25	18602	601	matched expected 10143.63	20260628-014716_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+mlxlm-steady	ledger	2000	42	rlm	True	completed	60.79	18602	601	matched expected 10143.63	20260628-014911_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+mlxlm-steady	ledger	2000	42	rlm	True	completed	63.98	18602	601	matched expected 10143.63	20260628-015013_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+mlxlm-steady	ledger	2000	42	rlm	True	completed	72.47	18602	601	matched expected 10143.63	20260628-015119_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+mlxlm-fresh	ledger	2000	43	rlm	True	completed	86.39	18210	581	matched expected 14480.11	20260628-015358_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+mlxlm-fresh	ledger	2000	44	rlm	False	completed	65.49	11953	479	expected 13654.2, answer numbers: [16847.62]	20260628-015526_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+dflash-warmup2	ledger	2000	42	rlm	True	completed	31.59	11608	445	matched expected 10143.63	20260628-015719_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+dflash-fresh	ledger	2000	43	rlm	True	completed	113.65	11692	500	matched expected 14480.11	20260628-015753_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+dflash-fresh	ledger	2000	44	rlm	True	completed	207.56	11923	600	matched expected 13654.2	20260628-015948_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ornith	ledger	2000	42	rlm	True	completed	16.78	11503	391	matched expected 10143.63	20260628-032221_ledger-2000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ornith	ledger	2000	42	rlm	True	completed	17.36	11463	703	matched expected 10143.63	20260628-032313_ledger-2000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ornith	ledger	20000	42	rlm	True	completed	19.4	17791	680	matched expected 115797.87	20260628-032332_ledger-20000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+pitune-fa-warmup	ledger	2000	42	rlm	True	completed	117.9	17816	628	matched expected 10143.63	20260628-032423_ledger-2000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+pitune-fa	ledger	2000	42	rlm	True	completed	81.9	12483	583	matched expected 10143.63	20260628-032623_ledger-2000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+pitune-fa	ledger	20000	42	rlm	True	completed	151.4	12213	717	matched expected 115797.87	20260628-032746_ledger-20000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2

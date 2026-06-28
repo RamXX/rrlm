@@ -34,15 +34,16 @@ accuracy + wall-clock + tokens.
    ```bash
    # leaf (DFlash :8771) -- the cheap fan-out model
    ./scripts/local-serving/serve-models.sh start
-   # orchestrator A: pi-tune Q6_K (llama-server :8773)
-   ./scripts/local-serving/serve-pitune.sh
-   # orchestrator B: official Qwen3.6-27B 8-bit (mlx_lm :8772)
-   ./scripts/local-serving/serve-qwen36.sh
+   # orchestrator: Ornith-1.0-35B Q6_K (llama-server :8774). Single 65536 slot for
+   # the proof's context wall (the experiment runs cells sequentially):
+   PARALLEL=1 CTX=65536 NOTHINK=1 ./scripts/local-serving/serve-ornith.sh
    ```
 
-   These appear in Pi's `~/.pi/agent/models.json` as providers `pitune`,
-   `qwen-official`, `supergemma` (rrlm resolves models from Pi config). The served
-   context window is **65536 tokens** -- the wall the experiment pushes data past.
+   These appear in Pi's `~/.pi/agent/models.json` as providers `ornith` and
+   `supergemma` (rrlm resolves models from Pi config). The served context window is
+   **65536 tokens** -- the wall the experiment pushes data past. (For production /
+   parallel agents, drop `PARALLEL=1` to use continuous batching; see
+   docs/LOCAL_SERVING.md.)
 
 3. Run the experiment (resumable -- appends to `results.tsv` as each cell finishes;
    re-run to resume after any interruption, completed cells are skipped). Launch it
@@ -65,11 +66,11 @@ accuracy + wall-clock + tokens.
 ```bash
 # the model alone (baseline) -- fails to ingest large data
 python -m rrlm.bench.runner --task ledger --condition baseline --size 20000 \
-  --model pitune/qwen3.6-27b-pi-tune --reasoning off
+  --model ornith/ornith-1.0-35b --reasoning off
 
 # the same model + RLM -- solves it
 python -m rrlm.bench.runner --task ledger --condition rlm --size 20000 \
-  --model pitune/qwen3.6-27b-pi-tune \
+  --model ornith/ornith-1.0-35b \
   --sub-model supergemma/Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2 --reasoning off
 ```
 

@@ -21,7 +21,7 @@ DATA ?= -
 
 .PHONY: setup test lint smoke baseline compare report clean-runs \
         solve pi-run eval-tabular eval-bugfind eval-pi \
-        serve-orch serve-leaf serve-stop
+        serve-orch serve-leaf serve-stop serve-purge
 
 setup:
 	uv sync
@@ -73,13 +73,25 @@ eval-pi:
 
 # --- Optional local model servers (offline / $0 inference) ------------------
 # See docs/LOCAL_SERVING.md. Run each in its own terminal.
+# Orchestrator: Ornith-1.0-35B (Qwen3.5 MoE) on llama.cpp continuous batching -- the
+# settled top model (Track C): correct on all RLM task types (full superpowers proof
+# re-runs green on Ornith), ~5-8x faster end-to-end than a dense 27B, scales under
+# parallel agents. The only orchestrator now; pair it with the supergemma leaf.
 serve-orch:
-	./scripts/local-serving/serve-pitune.sh
+	NOTHINK=1 ./scripts/local-serving/serve-ornith.sh
 
 serve-leaf:
 	./scripts/local-serving/serve-models.sh start
 
 serve-stop:
 	-./scripts/local-serving/serve-models.sh stop 2>/dev/null; \
-	 pkill -f "serve-pitune.sh|llama-server.*8773" 2>/dev/null; \
+	 pkill -f "serve-ornith.sh|llama-server.*8774" 2>/dev/null; \
+	 ./scripts/local-serving/purge-dflash-cache.sh 2>/dev/null; \
 	 echo "stopped local model servers"
+
+# Manually drop the regenerable DFlash prefix cache (safe: skips if a server is up).
+serve-purge:
+	./scripts/local-serving/purge-dflash-cache.sh
+
+# (The Track C DFlash-vs-MTP decode bake-off target was removed -- its Qwen/pi-tune
+# weights were purged. The investigation record lives in experiments/dflash-vs-mtp/.)

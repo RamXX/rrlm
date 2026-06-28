@@ -4,42 +4,52 @@ rrlm runs against on-device models with no API keys and full privacy. This is th
 optional power-user path; for first use, any model configured in Pi (including a
 cloud one) works without any of this.
 
-The settled local configuration from the experiments (see
-[FINDINGS.md](FINDINGS.md)) is a **high-fidelity orchestrator** plus a **cheap,
-quantized, non-thinking leaf**:
+The settled local configuration (see [FINDINGS.md](FINDINGS.md) and the Track C
+bake-off in [../experiments/dflash-vs-mtp/FINDINGS.md](../experiments/dflash-vs-mtp/FINDINGS.md))
+is a **fast, high-quality MoE orchestrator** plus a **cheap, quantized, non-thinking
+leaf**:
 
-- Orchestrator: a Pi-harness-tuned Qwen3.6-27B (`bytkim/Qwen3.6-27B-MTP-pi-tune`),
-  Q6_K GGUF, served by `llama-server`, no-thinking, temp 0.7.
+- Orchestrator: **Ornith-1.0-35B** (`deepreinforce-ai/Ornith-1.0-35B-GGUF`, Qwen3.5
+  35B MoE, agentic coding -- SWE-bench Verified 75.6), Q6_K, served by `llama-server`
+  with continuous batching (`--parallel`, `-fa on`), thinking off for the RLM role.
 - Leaf: `supergemma-26b` (gemma-4-26b uncensored, 4-bit MLX) served via DFlash.
+
+Ornith is the only orchestrator. It was chosen over a dense Qwen3.6-27B (pi-tune /
+official) because its MoE keeps prefill cheap (the RLM loop is prefill-bound), making
+it ~5-8x faster end-to-end while passing the full superpowers proof, and because it
+*scales* under parallel agents where the dense MLX paths collapsed.
 
 ## Scripts
 
 All live in `scripts/local-serving/` and are parameterized by environment variables
-(no absolute paths baked in). Binaries (`llama-server`, `dflash`, `mlx_lm.server`)
-are resolved from `PATH`; override with `$DFLASH`, `$MLX_LM_SERVER`, etc.
+(no absolute paths baked in). Binaries (`llama-server`, `dflash`) are resolved from
+`PATH`; override with `$DFLASH` etc.
 
 | Script | Serves | Default port |
 |--------|--------|--------------|
-| `serve-pitune.sh` | pi-tune Q6_K orchestrator via `llama-server` | 8773 |
-| `serve-models.sh` | supergemma leaf via DFlash (heretic orchestrator optional) | 8771 |
-| `serve-qwen36.sh` | official Qwen3.6-27B 8-bit via `mlx_lm.server` (draftless) | 8772 |
-| `dflash-qwen36.sh` | official Qwen3.6-27B 8-bit via DFlash (speculative) | 8770 |
+| `serve-ornith.sh` | Ornith-1.0-35B Q6_K orchestrator via `llama-server` (`--parallel`, `-fa on`) | 8774 |
+| `serve-models.sh` | supergemma leaf via DFlash | 8771 |
+| `purge-dflash-cache.sh` | drop the regenerable DFlash prefix cache (leaf) | -- |
 
 ```bash
-# orchestrator (own terminal)
-make serve-orch                       # -> scripts/local-serving/serve-pitune.sh
+# orchestrator (own terminal) -- Ornith, thinking off, continuous batching
+make serve-orch                       # -> serve-ornith.sh (NOTHINK=1)
 
 # leaf (own terminal)
-make serve-leaf                       # -> scripts/local-serving/serve-models.sh start
+make serve-leaf                       # -> serve-models.sh start
 
 make serve-stop                       # stop everything
 ```
 
-Prerequisites depend on the script: [`llama.cpp`](https://github.com/ggml-org/llama.cpp)
-(`llama-server`), [`mlx_lm`](https://github.com/ml-explore/mlx-lm), and/or DFlash.
-GGUF/MLX weights download from Hugging Face on first run (some DFlash draft repos are
-gated -- run `hf auth login`). Override any model/draft/port via the env vars
-documented at the top of each script.
+`serve-ornith.sh` env vars: `PARALLEL` (continuous-batching slots, default 4),
+`CTX` (default 65536), `NOTHINK=1` (suppress `<think>` for the RLM role), `NGL`,
+`PORT`, `QUANT_FILE`. For parallel agents keep the default `--parallel 4`; for the
+superpowers proof (sequential cells needing the full 65536 context wall) use
+`PARALLEL=1 CTX=65536`.
+
+Prerequisites: [`llama.cpp`](https://github.com/ggml-org/llama.cpp) (`llama-server`)
+for the orchestrator, and DFlash for the leaf. GGUF/MLX weights download from Hugging
+Face on first run (some DFlash draft repos are gated -- run `hf auth login`).
 
 ## Point Pi (and rrlm) at the local servers
 
@@ -49,11 +59,11 @@ e.g.:
 ```json
 {
   "providers": {
-    "pitune": {
-      "baseUrl": "http://127.0.0.1:8773/v1",
+    "ornith": {
+      "baseUrl": "http://127.0.0.1:8774/v1",
       "api": "openai-completions",
       "apiKey": "local",
-      "models": [{ "id": "qwen3.6-27b-pi-tune", "contextWindow": 262100, "maxTokens": 65536 }]
+      "models": [{ "id": "ornith-1.0-35b", "contextWindow": 262144, "maxTokens": 32768 }]
     },
     "supergemma": {
       "baseUrl": "http://127.0.0.1:8771/v1",
@@ -65,18 +75,42 @@ e.g.:
 }
 ```
 
-Then run with those references:
+Then run with those references (this is also the `rrlm-solve` default):
 
 ```bash
 rrlm-solve -i "..." -d @data.txt \
-  --main pitune/qwen3.6-27b-pi-tune --sub supergemma/supergemma4-26b
+  --main ornith/ornith-1.0-35b --sub supergemma/supergemma4-26b
 ```
 
 ## Why this shape
 
-Wall-clock for these workloads is dominated by leaf fan-out, not orchestrator decode,
-so orchestrator *reliability* (clean, well-formed turns) matters more than its speed.
-Speculative tricks (DFlash, MTP) and smaller quants traded reliability for speed the
-workload cannot use. rrlm also auto-raises the per-turn sandbox timeout to 3600s for
-local endpoints, because local leaves serve serially and a wide fan-out runs as one
-REPL turn. Details in [FINDINGS.md](FINDINGS.md).
+Wall-clock for these workloads is dominated by **prefill** of the re-sent REPL context
+and by **leaf fan-out**, not orchestrator decode. An MoE orchestrator (Ornith) makes
+prefill cheap and -- on `llama-server --parallel` -- lets concurrent agents batch
+instead of collapse (the single-stream MLX paths, mlx_lm and DFlash, serialized and
+fell over at ~8 concurrent requests). rrlm also auto-raises the per-turn sandbox
+timeout to 3600s for local endpoints, because the local leaf still serves serially and
+a wide fan-out runs as one REPL turn (the imdb-1500 cell makes hundreds of sequential
+leaf calls). The leaf is the bottleneck for heavy semantic fan-out, but the
+supergemma + DFlash leaf is proven and works well, so it is kept as-is (a llama.cpp
+`--parallel` leaf was considered and set aside -- no need to disturb a working leaf).
+Details in [../experiments/dflash-vs-mtp/FINDINGS.md](../experiments/dflash-vs-mtp/FINDINGS.md).
+
+
+## rlm_solve execution isolation (optional)
+
+`rlm_solve`'s generated Python runs in a sandbox chosen by `--backend` (a predict-rlm
+built-in; nothing here patches predict-rlm):
+
+| `RRLM_BACKEND` | isolation | notes |
+|---|---|---|
+| `supervisor` (default) | none -- host CPython | fastest; fine for trusted local use |
+| `jspi` | Deno/Pyodide WASM | local, $0, zero-setup (Deno present); slower cold-start |
+| `sbx` | real Linux container (Docker) | strongest; needs `predict-rlm[sbx]` + the `sbx` CLI (`brew install docker/tap/sbx`, `sbx login`); ~25s/call ephemeral overhead (use a persistent reused sandbox to amortize) |
+
+The `rrlm-solve` wrapper picks the backend from `RRLM_BACKEND` (default `supervisor`),
+overridable per call with `--backend`. For an isolated run:
+
+```bash
+RRLM_BACKEND=sbx rrlm-solve -i "..." -d @data.txt
+```

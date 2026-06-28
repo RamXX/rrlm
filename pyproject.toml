@@ -35,6 +35,7 @@ Issues = "https://github.com/RamXX/rrlm/issues"
 rrlm-solve = "rrlm.solve:main"
 rrlm-bench = "rrlm.bench.runner:main"
 rrlm-report = "rrlm.bench.report:main"
+rrlm-traces = "rrlm.traces:main"
 
 [build-system]
 requires = ["hatchling"]

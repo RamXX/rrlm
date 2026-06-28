@@ -1,0 +1,36 @@
+{
+  "engine": "llama.cpp/llama-server",
+  "model": "bytkim/Qwen3.6-27B-MTP-pi-tune-GGUF:Q6_K",
+  "config": "fa=on ngl=999 parallel=1 ctx=16384",
+  "prompt": "dflash smoke-default (math)",
+  "records": [
+    {
+      "label": "plain_fa",
+      "max_tokens": 64,
+      "predicted_n": "64",
+      "predicted_per_second": "9.705",
+      "source": "timings"
+    },
+    {
+      "label": "plain_fa",
+      "max_tokens": 512,
+      "predicted_n": "512",
+      "predicted_per_second": "10.115",
+      "source": "timings"
+    },
+    {
+      "label": "mtp_fa",
+      "max_tokens": 64,
+      "predicted_n": "64",
+      "predicted_per_second": "10.921",
+      "source": "timings"
+    },
+    {
+      "label": "mtp_fa",
+      "max_tokens": 512,
+      "predicted_n": "512",
+      "predicted_per_second": "11.257",
+      "source": "timings"
+    }
+  ]
+}

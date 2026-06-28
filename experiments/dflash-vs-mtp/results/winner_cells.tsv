@@ -1,0 +1,3 @@
+task	size	seed	condition	backend	passed	status	wall_s	prompt_tok	completion_tok	detail	run_id
+ledger	2000	42	rlm	dflash	True	completed	94.86	11608	445	matched expected 10143.63	20260628-012944_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	20000	42	rlm	dflash	True	completed	109.99	12007	588	matched expected 115797.87	20260628-013121_ledger-20000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2

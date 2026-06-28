@@ -1,0 +1,49 @@
+{
+  "label": "ornith_par4",
+  "url": "http://127.0.0.1:8774/v1",
+  "model": "ornith-1.0-35b",
+  "prefix_tokens": 5500,
+  "max_tokens": 160,
+  "rows": [
+    {
+      "concurrency": 1,
+      "wall_s": 3.68,
+      "agg_completion_tps": 43.5,
+      "total_completion_tokens": 160,
+      "per_req_decode_tps_median": 43.52,
+      "latency_p50_s": 3.68,
+      "latency_p95_s": 3.68,
+      "scale_vs_c1": 1.0
+    },
+    {
+      "concurrency": 2,
+      "wall_s": 9.93,
+      "agg_completion_tps": 32.22,
+      "total_completion_tokens": 320,
+      "per_req_decode_tps_median": 16.11,
+      "latency_p50_s": 9.93,
+      "latency_p95_s": 9.93,
+      "scale_vs_c1": 0.74
+    },
+    {
+      "concurrency": 4,
+      "wall_s": 15.11,
+      "agg_completion_tps": 42.35,
+      "total_completion_tokens": 640,
+      "per_req_decode_tps_median": 10.61,
+      "latency_p50_s": 15.09,
+      "latency_p95_s": 15.11,
+      "scale_vs_c1": 0.97
+    },
+    {
+      "concurrency": 8,
+      "wall_s": 21.27,
+      "agg_completion_tps": 60.18,
+      "total_completion_tokens": 1280,
+      "per_req_decode_tps_median": 10.24,
+      "latency_p50_s": 21.23,
+      "latency_p95_s": 21.26,
+      "scale_vs_c1": 1.38
+    }
+  ]
+}

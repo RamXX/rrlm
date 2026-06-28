@@ -1,6 +1,16 @@
 # Does the RLM technique give a small local model superpowers?
 
-**Yes -- demonstrated, not asserted.** A 27B model running entirely on a laptop,
+> **Re-run on Ornith-1.0-35B (2026-06-27).** The proof is now generated with Ornith
+> (Qwen3.5 35B MoE) as the sole orchestrator + the supergemma leaf. Result holds and
+> is faster: **RLM passed 26 / 26 (100%); baseline (model alone) passed 5 / 25 (20%)**
+> across **51 cells** -- the 5 baseline passes are again the small/easy cases. Current
+> authoritative data: [`results.tsv`](results.tsv) and [`PROOF_tables.md`](PROOF_tables.md)
+> (both regenerated on Ornith). The narrative below was written for the original
+> dense-model run (pi-tune / official Qwen3.6-27B); the capability cliff and every
+> conclusion reproduce on Ornith, but model-specific anecdotes (e.g. the official-Qwen
+> GPU crash, exact wall-clock numbers) refer to that original run.
+
+**Yes -- demonstrated, not asserted.** A small model running entirely on a laptop,
 with the Recursive Language Model (RLM) technique, performs tasks it **provably
 cannot do on its own**: exact computation over data far larger than its context
 window, and reliable computation where reading-and-reasoning silently fails. No
@@ -18,10 +28,12 @@ and compares). All inference is local, so cost is **$0** and the metrics are
 accuracy, wall-clock, and tokens. **55 cells** across 4 task types, data sizes
 spanning the context wall, 3 seeds, and 2 model builds.
 
-> **Bottom line: baseline (model alone) passed 4 / 27 (15%). RLM (same model +
-> technique) passed 28 / 28 (100%).** The 4 baseline passes are exactly the small,
-> fitting, easy cases; everything large or exact, the model alone got wrong or could
-> not attempt -- and RLM solved all of it.
+> **Bottom line (Ornith re-run): baseline (model alone) passed 5 / 25 (20%). RLM
+> (same model + technique) passed 26 / 26 (100%).** The baseline passes are exactly
+> the small, fitting, easy cases; everything large or exact, the model alone got wrong
+> or could not attempt -- and RLM solved all of it. (Original dense-model run: baseline
+> 4 / 27, RLM 28 / 28 -- same pattern; the cell count differs only because the former
+> cross-model phase is now redundant under one model.)
 
 Raw data: [`results.tsv`](results.tsv). Per-cell tables + extracted code:
 [`PROOF_tables.md`](PROOF_tables.md). Environment:

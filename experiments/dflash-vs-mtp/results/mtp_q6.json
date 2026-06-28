@@ -1,0 +1,40 @@
+{
+  "engine": "llama.cpp/llama-server",
+  "model": "bytkim/Qwen3.6-27B-MTP-pi-tune-GGUF:Q6_K",
+  "gpu": "metal(ngl=999)",
+  "parallel": 1,
+  "records": [
+    {
+      "label": "plain",
+      "n_predict": 64,
+      "predicted_n": "64",
+      "predicted_ms": "11245.691",
+      "predicted_per_second": "5.691068694667139",
+      "prompt_per_second": "47.58559976993397"
+    },
+    {
+      "label": "plain",
+      "n_predict": 512,
+      "predicted_n": "512",
+      "predicted_ms": "83780.78",
+      "predicted_per_second": "6.111186837840373",
+      "prompt_per_second": "36.48300645352659"
+    },
+    {
+      "label": "mtp",
+      "n_predict": 64,
+      "predicted_n": "64",
+      "predicted_ms": "7480.3",
+      "predicted_per_second": "8.55580658529738",
+      "prompt_per_second": "50.50449599806766"
+    },
+    {
+      "label": "mtp",
+      "n_predict": 512,
+      "predicted_n": "512",
+      "predicted_ms": "64877.754",
+      "predicted_per_second": "7.891765180403748",
+      "prompt_per_second": "53.104537436390004"
+    }
+  ]
+}

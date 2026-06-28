@@ -176,10 +176,19 @@ def build_rlm(
             exec_timeout=cfg.sandbox_exec_timeout
         )
     elif cfg.backend == "sbx":
+        import os
+
         from predict_rlm import SbxConfig
 
+        sbx_kwargs: dict = {"exec_timeout": cfg.sandbox_exec_timeout}
+        # RRLM_SBX_NAME -> a persistent, reused container (reuse=True implies
+        # persist=True). It survives process exit, so successive rrlm-solve CLI
+        # calls reuse one warm sandbox and skip the ~25s per-call create cost.
+        name = os.environ.get("RRLM_SBX_NAME")
+        if name:
+            sbx_kwargs.update(name=name, reuse=True)
         rlm_kwargs["sandbox_backend"] = "sbx"
-        rlm_kwargs["sbx_config"] = SbxConfig(exec_timeout=cfg.sandbox_exec_timeout)
+        rlm_kwargs["sbx_config"] = SbxConfig(**sbx_kwargs)
     else:  # jspi
         if cfg.sandbox_exec_timeout != 300.0:
             _set_sandbox_exec_timeout(cfg.sandbox_exec_timeout)

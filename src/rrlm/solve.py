@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 
@@ -46,7 +47,9 @@ def solve(
     backend: str = "jspi",
     max_depth: int = 2,
     max_iterations: int = 30,
+    max_llm_calls: int = 50,
     max_action_retries: int = 2,
+    timeout_s: float | None = None,
     reconcile_cost: bool = True,
 ) -> dict:
     """Run the RLM-first agent over (instruction, data); return answer + metrics.
@@ -81,6 +84,7 @@ def solve(
         backend=backend,
         max_depth=max_depth,
         max_iterations=max_iterations,
+        max_llm_calls=max_llm_calls,
         sandbox_exec_timeout=3600.0 if local else 300.0,
         max_action_retries=max_action_retries,
     )
@@ -94,15 +98,33 @@ def solve(
     main_start, sub_start = len(main_lm.history), len(sub_lm.history)
 
     answer, error, spawn_stats = "", None, {}
+    prediction = None
     t0 = time.monotonic()
     try:
         rlm = build_rlm(cfg, main_lm, sub_lm)
-        prediction = asyncio.run(rlm.acall(task=instruction, data=data))
+        coro = rlm.acall(task=instruction, data=data)
+        if timeout_s and timeout_s > 0:
+            # Hard total wall-clock ceiling: cancel the whole run if it overruns.
+            prediction = asyncio.run(asyncio.wait_for(coro, timeout=timeout_s))
+        else:
+            prediction = asyncio.run(coro)
         answer = prediction.answer
         spawn_stats = dict(rlm.spawn_stats)
+    except (asyncio.TimeoutError, TimeoutError):
+        error = f"TimeoutError: run exceeded timeout_s={timeout_s}s"
     except Exception as exc:  # noqa: BLE001 -- return the failure to the caller
         error = f"{type(exc).__name__}: {exc}"
     wall_clock_s = time.monotonic() - t0
+
+    # Capture the predict-rlm RunTrace for later RLM-GEPA, if RRLM_TRACE_DIR is set.
+    trace_file = None
+    trace_dir = os.environ.get("RRLM_TRACE_DIR")
+    if trace_dir and prediction is not None and error is None:
+        trace_file = export_trace(
+            prediction, trace_dir=trace_dir, instruction=instruction, answer=answer,
+            data_chars=len(data or ""), wall_clock_s=round(wall_clock_s, 2),
+            config={"main_model": main.ref, "sub_model": sub.ref, "reasoning": reasoning},
+        )
 
     records = harvest_lm_history(main_lm, "main", main_start) + harvest_lm_history(
         sub_lm, "sub", sub_start
@@ -115,6 +137,7 @@ def solve(
         "answer": answer,
         "error": error,
         "wall_clock_s": round(wall_clock_s, 2),
+        "trace_file": trace_file,
         "spawn_stats": spawn_stats,
         "usage": summarize(records),
         "config": {
@@ -124,6 +147,49 @@ def solve(
             "backend": backend,
         },
     }
+
+
+def export_trace(
+    prediction,
+    *,
+    trace_dir: str,
+    instruction: str = "",
+    answer: str = "",
+    data_chars: int = 0,
+    config: dict | None = None,
+    wall_clock_s: float | None = None,
+) -> str | None:
+    """Best-effort: write this run's predict-rlm RunTrace to a UNIQUE file under
+    ``trace_dir`` (one per process, so concurrent/repeated rrlm-solve calls
+    accumulate) plus an ``index.jsonl`` line pairing instruction->answer->trace.
+    These are the traces consumed by RLM-GEPA later. Returns the path or None.
+
+    No-op (returns None) when ``trace_dir`` is falsy, the prediction has no
+    ``trace``, or anything goes wrong -- trace capture must never break solve().
+    """
+    trace = getattr(prediction, "trace", None)
+    if not trace_dir or trace is None or not hasattr(trace, "to_exportable_json"):
+        return None
+    try:
+        os.makedirs(trace_dir, exist_ok=True)
+        stamp = f"{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}-{os.getpid()}"
+        path = os.path.join(trace_dir, f"trace-{stamp}.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(trace.to_exportable_json())
+        index = os.path.join(trace_dir, "index.jsonl")
+        rec = {
+            "trace_file": os.path.basename(path),
+            "instruction": (instruction or "")[:500],
+            "answer": (answer or "")[:500],
+            "data_chars": data_chars,
+            "wall_clock_s": wall_clock_s,
+            "config": config or {},
+        }
+        with open(index, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, default=str) + "\n")
+        return path
+    except Exception:  # noqa: BLE001 -- trace capture is best-effort, never fatal
+        return None
 
 
 def _read_data(arg: str | None) -> str:
@@ -163,8 +229,21 @@ def main() -> None:
     parser.add_argument("--backend", default="jspi", choices=["jspi", "sbx", "supervisor"])
     parser.add_argument("--max-depth", type=int, default=2)
     parser.add_argument("--action-retries", type=int, default=2, help="per-turn re-asks on parse failure")
+    # Guardrails (hard ceilings; all enforced within predict-rlm's constructs).
+    parser.add_argument("--timeout", type=float, default=None,
+                        help="hard total wall-clock ceiling in seconds (env RRLM_TIMEOUT); cancels the run on overrun")
+    parser.add_argument("--max-llm-calls", type=int, default=50,
+                        help="hard cap on sub-LM (predict) calls -- the de-facto spend ceiling")
+    parser.add_argument("--max-iterations", type=int, default=30, help="hard cap on REPL turns")
     parser.add_argument("--json", action="store_true", help="emit full result JSON, not just the answer")
     args = parser.parse_args()
+
+    timeout_s = args.timeout
+    if timeout_s is None and os.environ.get("RRLM_TIMEOUT"):
+        try:
+            timeout_s = float(os.environ["RRLM_TIMEOUT"])
+        except ValueError:
+            timeout_s = None
 
     result = solve(
         args.instruction,
@@ -175,7 +254,10 @@ def main() -> None:
         temperature=args.temperature,
         backend=args.backend,
         max_depth=args.max_depth,
+        max_iterations=args.max_iterations,
+        max_llm_calls=args.max_llm_calls,
         max_action_retries=args.action_retries,
+        timeout_s=timeout_s,
     )
 
     if args.json:

@@ -20,8 +20,16 @@ set -euo pipefail
 
 # dflash resolved from PATH; override with $DFLASH if installed elsewhere.
 DFLASH="${DFLASH:-dflash}"
+# Draft quantization for DFlash speculative decoding. w8 (8-bit) by default --
+# never Q4 (project quant rule). DFlash is lossless regardless of draft precision
+# (the target re-validates every drafted token); this only affects draft speed.
+# DFlash MLX kernels support 4-bit or 8-bit only (no 6-bit). Override with $DRAFT_QUANT.
+DRAFT_QUANT="${DRAFT_QUANT:-w8:gs64}"
 RUN="${RUN:-/tmp/llm-servers}"
 mkdir -p "$RUN"
+
+# Directory of this script -- used to find the cache-purge helper.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # name | port | target (HF repo id or local path) | DFlash draft. All env-overridable.
 # heretic is an OPTIONAL legacy orchestrator (a local uncensored build); leave
@@ -49,7 +57,7 @@ _start_one() {
   fi
   echo "[$name] starting on $HOST:$port (thinking $think) ..."
   nohup "$DFLASH" serve --model "$model" --draft "$draft" \
-    --draft-quant w4:gs64 --host "$HOST" --port "$port" "${extra[@]}" > "$log" 2>&1 &
+    --draft-quant "$DRAFT_QUANT" --host "$HOST" --port "$port" "${extra[@]}" > "$log" 2>&1 &
   echo $! > "$pidf"
   echo "[$name] pid $(cat "$pidf") | log $log"
 }
@@ -101,9 +109,13 @@ case "$cmd" in
     echo "  supergemma: http://$HOST:$SG_PORT/v1"
     ;;
   stop)
-    _stop_one heretic; _stop_one supergemma ;;
+    _stop_one heretic; _stop_one supergemma
+    # Servers are down -- reclaim the (regenerable) DFlash prefix cache.
+    "$SCRIPT_DIR/purge-dflash-cache.sh" || true ;;
   restart)
-    "$0" stop; sleep 2
+    # Stop in-place WITHOUT purging: a restart keeps the prefix cache on disk so
+    # the freshly-started servers can reuse it instead of re-warming cold.
+    _stop_one heretic; _stop_one supergemma; sleep 2
     rt=()
     if   [ "$NOTHINK_HERETIC" = 1 ] && [ "$NOTHINK_SG" = 1 ]; then rt=(--no-think both)
     elif [ "$NOTHINK_HERETIC" = 1 ]; then rt=(--no-think heretic)

@@ -1,56 +1,52 @@
 task	model	size	seed	condition	passed	status	wall_s	prompt_tok	completion_tok	check_detail	run_id
-ledger	pitune	500	42	baseline	False	completed	236.67	23082	20	expected 2743.79, answer numbers: [3501.97]	20260627-022512_ledger-500_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	500	42	rlm	True	completed	158.7	18542	811	matched expected 2743.79	20260627-022910_ledger-500_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	2000	42	baseline	False	error	0.67	0	0	no answer	20260627-023150_ledger-2000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	2000	42	rlm	True	completed	207.54	19153	952	matched expected 10143.63	20260627-023152_ledger-2000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	5000	42	baseline	False	error	0.65	0	0	no answer	20260627-023522_ledger-5000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	5000	42	rlm	True	completed	105.33	11640	567	matched expected 26453.9	20260627-023524_ledger-5000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	20000	42	baseline	False	error	0.86	0	0	no answer	20260627-023711_ledger-20000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	20000	42	rlm	True	completed	199.7	25186	1022	matched expected 115797.87	20260627-023713_ledger-20000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-needle	pitune	2000	42	baseline	True	completed	329.59	25514	16	matched Lisbon	20260627-024034_needle-2000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-needle	pitune	2000	42	rlm	True	completed	207.42	19362	1047	matched Lisbon	20260627-024605_needle-2000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-bugfind	pitune	60	42	baseline	True	completed	21.81	2372	20	matched fn_040_sum_to	20260627-024934_bugfind-60_pitune-qwen3.6-27b-pi-tune_baseline-roff
-bugfind	pitune	60	42	rlm	True	completed	718.66	53035	3557	matched fn_040_sum_to	20260627-024959_bugfind-60_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-imdb	pitune	200	42	baseline	True	completed	249.13	25584	17	matched P205 (neg fraction 0.55)	20260627-030159_imdb-200_pitune-qwen3.6-27b-pi-tune_baseline-roff
-imdb	pitune	200	42	rlm	True	completed	363.79	86928	4693	matched P205 (neg fraction 0.55)	20260627-032927_imdb-200_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	qwen-official	2000	42	baseline	False	completed	1237.52	91765	1287	expected 10143.63, answer numbers: [10666.61]	20260627-033532_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_baseline-roff
-ledger	qwen-official	2000	42	rlm	True	completed	113.65	11720	550	matched expected 10143.63	20260627-035612_ledger-2000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	qwen-official	20000	42	baseline	False	error	1853.44	0	0	no answer	20260627-035807_ledger-20000_qwen-official-mlx-community-Qwen3.6-27B-8bit_baseline-roff
-ledger	pitune	2000	43	baseline	False	error	2.97	0	0	no answer	20260627-042909_ledger-2000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	2000	43	rlm	True	completed	114.0	11795	639	matched expected 14480.11	20260627-042913_ledger-2000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	5000	43	baseline	False	error	0.53	0	0	no answer	20260627-043109_ledger-5000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	5000	43	rlm	True	completed	82.21	11564	543	matched expected 33663.18	20260627-043111_ledger-5000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	100	42	baseline	True	completed	35.49	4794	19	matched expected 584.04	20260627-043235_ledger-100_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	100	42	rlm	True	completed	73.15	11521	450	matched expected 584.04	20260627-043312_ledger-100_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	300	42	baseline	False	completed	126.96	13947	20	expected 2039.16, answer numbers: [2594.07]	20260627-043426_ledger-300_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	300	42	rlm	True	completed	160.19	18135	657	matched expected 2039.16	20260627-043635_ledger-300_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	600	42	baseline	False	completed	135.99	27659	20	expected 2996.6, answer numbers: [3597.06]	20260627-043916_ledger-600_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	600	42	rlm	True	completed	97.41	12305	521	matched expected 2996.6	20260627-044134_ledger-600_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	1000	42	baseline	False	completed	230.86	45964	20	expected 4686.21, answer numbers: [5698.72]	20260627-044312_ledger-1000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	1000	42	rlm	True	completed	91.7	11530	400	matched expected 4686.21	20260627-044705_ledger-1000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	1300	42	baseline	False	completed	209.42	59704	20	expected 6529.69, answer numbers: [5819.2]	20260627-044838_ledger-1300_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	1300	42	rlm	True	completed	140.74	11631	583	matched expected 6529.69	20260627-045209_ledger-1300_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	100	43	baseline	False	completed	40.52	4799	19	expected 430.33, answer numbers: [420.33]	20260627-045431_ledger-100_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	100	43	rlm	True	completed	107.16	17851	550	matched expected 430.33	20260627-045513_ledger-100_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	300	43	baseline	False	completed	113.9	13967	20	expected 2235.95, answer numbers: [2375.16]	20260627-045701_ledger-300_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	300	43	rlm	True	completed	100.33	11489	487	matched expected 2235.95	20260627-045857_ledger-300_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	600	43	baseline	False	completed	140.28	27698	20	expected 4714.03, answer numbers: [4256.78]	20260627-050039_ledger-600_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	600	43	rlm	True	completed	107.04	17777	500	matched expected 4714.03	20260627-050300_ledger-600_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	1000	43	baseline	False	completed	266.17	46026	20	expected 6739.76, answer numbers: [5687.92]	20260627-050449_ledger-1000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	1000	43	rlm	True	completed	89.05	11447	427	matched expected 6739.76	20260627-050916_ledger-1000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	1300	43	baseline	False	completed	244.42	59753	20	expected 9246.06, answer numbers: [7028.31]	20260627-051047_ledger-1300_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	1300	43	rlm	True	completed	130.08	11503	461	matched expected 9246.06	20260627-051453_ledger-1300_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	100	44	baseline	False	completed	43.69	4789	20	expected 1527.29, answer numbers: [1722.39]	20260627-051704_ledger-100_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	100	44	rlm	True	completed	70.19	11389	344	matched expected 1527.29	20260627-051750_ledger-100_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	300	44	baseline	False	completed	124.6	13953	20	expected 1977.35, answer numbers: [2807.19]	20260627-051901_ledger-300_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	300	44	rlm	True	completed	113.41	11968	554	matched expected 1977.35	20260627-052107_ledger-300_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	600	44	baseline	False	completed	147.81	27683	20	expected 2929.44, answer numbers: [3601.52]	20260627-052302_ledger-600_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	600	44	rlm	True	completed	129.07	18245	624	matched expected 2929.44	20260627-052531_ledger-600_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	1000	44	baseline	False	completed	257.12	45997	20	expected 5750.58, answer numbers: [5328.04]	20260627-052742_ledger-1000_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	1000	44	rlm	True	completed	112.19	11785	596	matched expected 5750.58	20260627-053200_ledger-1000_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	pitune	1300	44	baseline	False	completed	220.76	59744	20	expected 8690.14, answer numbers: [8065.72]	20260627-053354_ledger-1300_pitune-qwen3.6-27b-pi-tune_baseline-roff
-ledger	pitune	1300	44	rlm	True	completed	163.83	12170	685	matched expected 8690.14	20260627-053736_ledger-1300_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-imdb	pitune	200	42	rlm-self	True	completed	1111.22	102059	4967	matched P205 (neg fraction 0.55)	20260627-054022_imdb-200_pitune-qwen3.6-27b-pi-tune_rlm-roff
-imdb	pitune	1500	42	baseline	False	error	0.66	0	0	no answer	20260627-055854_imdb-1500_pitune-qwen3.6-27b-pi-tune_baseline-roff
-imdb	pitune	1500	42	rlm	True	completed	1402.91	69271	21499	matched P205 (neg fraction 0.67)	20260627-055857_imdb-1500_pitune-qwen3.6-27b-pi-tune_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
-ledger	qwen-official	20000	42	rlm	True	completed	206.14	11585	557	matched expected 115797.87	20260627-062322_ledger-20000_qwen-official-mlx-community-Qwen3.6-27B-8bit_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	500	42	baseline	False	completed	33.31	23082	20	expected 2743.79, answer numbers: [2814.48]	20260628-042029_ledger-500_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	500	42	rlm	True	completed	18.13	11482	388	matched expected 2743.79	20260628-042104_ledger-500_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	2000	42	baseline	False	error	0.35	0	0	no answer	20260628-042124_ledger-2000_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	2000	42	rlm	True	completed	13.06	11415	423	matched expected 10143.63	20260628-042126_ledger-2000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	5000	42	baseline	False	error	0.39	0	0	no answer	20260628-042140_ledger-5000_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	5000	42	rlm	True	completed	32.49	31146	1132	matched expected 26453.9	20260628-042142_ledger-5000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	20000	42	baseline	False	error	0.75	0	0	no answer	20260628-042216_ledger-20000_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	20000	42	rlm	True	completed	43.72	31457	1538	matched expected 115797.87	20260628-042218_ledger-20000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+needle	ornith	2000	42	baseline	True	completed	46.09	25514	16	matched Lisbon	20260628-042304_needle-2000_ornith-ornith-1.0-35b_baseline-roff
+needle	ornith	2000	42	rlm	True	completed	21.12	18409	420	matched Lisbon	20260628-042351_needle-2000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+bugfind	ornith	60	42	baseline	True	completed	4.76	2372	20	matched fn_040_sum_to	20260628-042414_bugfind-60_ornith-ornith-1.0-35b_baseline-roff
+bugfind	ornith	60	42	rlm	True	completed	54.93	33967	1037	matched fn_040_sum_to	20260628-042420_bugfind-60_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+imdb	ornith	200	42	baseline	True	completed	58.31	25584	17	matched P205 (neg fraction 0.55)	20260628-042516_imdb-200_ornith-ornith-1.0-35b_baseline-roff
+imdb	ornith	200	42	rlm	True	completed	158.29	81851	5428	matched P205 (neg fraction 0.55)	20260628-042616_imdb-200_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	2000	43	baseline	False	error	0.46	0	0	no answer	20260628-042856_ledger-2000_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	2000	43	rlm	True	completed	15.41	11481	410	matched expected 14480.11	20260628-042858_ledger-2000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	5000	43	baseline	False	error	0.46	0	0	no answer	20260628-042915_ledger-5000_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	5000	43	rlm	True	completed	18.34	17302	461	matched expected 33663.18	20260628-042917_ledger-5000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	100	42	baseline	True	completed	6.95	4794	19	matched expected 584.04	20260628-042936_ledger-100_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	100	42	rlm	True	completed	15.33	11542	421	matched expected 584.04	20260628-042945_ledger-100_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	300	42	baseline	False	completed	20.82	13947	20	expected 2039.16, answer numbers: [2173.55]	20260628-043001_ledger-300_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	300	42	rlm	True	completed	14.66	11673	386	matched expected 2039.16	20260628-043024_ledger-300_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	600	42	baseline	False	completed	29.58	27659	20	expected 2996.6, answer numbers: [2754.83]	20260628-043040_ledger-600_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	600	42	rlm	True	completed	15.55	11392	446	matched expected 2996.6	20260628-043111_ledger-600_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	1000	42	baseline	False	completed	54.28	45964	20	expected 4686.21, answer numbers: [4537.98]	20260628-043128_ledger-1000_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	1000	42	rlm	True	completed	15.71	11507	444	matched expected 4686.21	20260628-043223_ledger-1000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	1300	42	baseline	False	completed	53.95	59704	20	expected 6529.69, answer numbers: [5547.96]	20260628-043241_ledger-1300_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	1300	42	rlm	True	completed	23.25	17736	588	matched expected 6529.69	20260628-043336_ledger-1300_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	100	43	baseline	False	completed	7.62	4799	19	expected 430.33, answer numbers: [441.05]	20260628-043401_ledger-100_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	100	43	rlm	True	completed	19.63	11647	520	matched expected 430.33	20260628-043410_ledger-100_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	300	43	baseline	True	completed	50.36	13967	1057	matched expected 2235.95	20260628-043431_ledger-300_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	300	43	rlm	True	completed	16.45	11475	435	matched expected 2235.95	20260628-043523_ledger-300_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	600	43	baseline	False	completed	31.71	27698	20	expected 4714.03, answer numbers: [3010.35]	20260628-043541_ledger-600_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	600	43	rlm	True	completed	16.46	11519	442	matched expected 4714.03	20260628-043614_ledger-600_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	1000	43	baseline	False	completed	56.32	46026	20	expected 6739.76, answer numbers: [3836.57]	20260628-043632_ledger-1000_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	1000	43	rlm	True	completed	28.81	24110	783	matched expected 6739.76	20260628-043729_ledger-1000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	1300	43	baseline	False	completed	53.53	59753	20	expected 9246.06, answer numbers: [5855.61]	20260628-043800_ledger-1300_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	1300	43	rlm	True	completed	33.42	24804	889	matched expected 9246.06	20260628-043855_ledger-1300_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	100	44	baseline	False	completed	7.34	4789	20	expected 1527.29, answer numbers: [1212.29]	20260628-043929_ledger-100_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	100	44	rlm	True	completed	15.09	11434	379	matched expected 1527.29	20260628-043938_ledger-100_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	300	44	baseline	False	completed	22.03	13953	20	expected 1977.35, answer numbers: [2084.76]	20260628-043955_ledger-300_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	300	44	rlm	True	completed	24.37	17700	682	matched expected 1977.35	20260628-044018_ledger-300_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	600	44	baseline	False	completed	31.52	27683	20	expected 2929.44, answer numbers: [2467.46]	20260628-044044_ledger-600_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	600	44	rlm	True	completed	18.02	11663	494	matched expected 2929.44	20260628-044117_ledger-600_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	1000	44	baseline	False	completed	56.22	45997	20	expected 5750.58, answer numbers: [3635.92]	20260628-044137_ledger-1000_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	1000	44	rlm	True	completed	32.05	24940	833	matched expected 5750.58	20260628-044234_ledger-1000_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+ledger	ornith	1300	44	baseline	False	completed	55.46	59744	20	expected 8690.14, answer numbers: [5739.33]	20260628-044308_ledger-1300_ornith-ornith-1.0-35b_baseline-roff
+ledger	ornith	1300	44	rlm	True	completed	16.18	11465	397	matched expected 8690.14	20260628-044405_ledger-1300_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
+imdb	ornith	200	42	rlm-self	True	completed	177.92	78164	4135	matched P205 (neg fraction 0.55)	20260628-044422_imdb-200_ornith-ornith-1.0-35b_rlm-roff
+imdb	ornith	1500	42	baseline	False	error	0.63	0	0	no answer	20260628-044722_imdb-1500_ornith-ornith-1.0-35b_baseline-roff
+imdb	ornith	1500	42	rlm	True	completed	757.39	331912	13355	matched P205 (neg fraction 0.67)	20260628-044724_imdb-1500_ornith-ornith-1.0-35b_rlm-roff-sub-supergemma4-26b-uncensored-mlx-4bit-v2
