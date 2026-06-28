@@ -24,8 +24,8 @@ RUNNER_ARGS = --model $(MAIN) --sub-model $(SUB) --reasoning $(REASONING) --seed
 INSTRUCTION ?= Which product id has the most negative reviews? Answer with the id only.
 DATA ?= -
 
-.PHONY: setup test cov coverage lint smoke baseline compare report clean-runs \
-        solve pi-run eval-tabular eval-bugfind eval-pi eval-crm \
+.PHONY: setup test cov coverage lint ci ci-lint ci-test smoke baseline compare \
+        report clean-runs solve pi-run eval-tabular eval-bugfind eval-pi eval-crm \
         serve-orch serve-leaf serve-stop serve-purge
 
 setup:
@@ -47,6 +47,19 @@ coverage: cov
 
 lint:
 	$(RUN) ruff check src/ tests/ examples/
+
+# --- Portable CI (Dagger) ---------------------------------------------------
+# The same gate as `make cov`, but inside a container so it reproduces anywhere
+# with a container runtime. Provider-agnostic: any CI runs `dagger call ci`.
+# Needs the Dagger CLI (https://docs.dagger.io) and Docker. See docs/CI.md.
+ci:
+	dagger call ci
+
+ci-lint:
+	dagger call lint
+
+ci-test:
+	dagger call test
 
 # --- Benchmarks (the research side; see docs/FINDINGS.md) --------------------
 # One RLM-condition run on the synthetic ledger task.

@@ -46,5 +46,7 @@ rrlm feature-detects optional `predict-rlm` constructor params (e.g.
 ## Pull requests
 
 - Start the description with a short rationale (*why*, not just *what*).
-- Ensure `make test` and `make lint` pass.
+- Ensure `make test` and `make lint` pass. To run the full portable gate the way
+  CI does (in a container), use `make ci` (needs the Dagger CLI + Docker; see
+  [docs/CI.md](docs/CI.md)).
 - One logical change per PR.

@@ -174,8 +174,29 @@ bring it up with the `make serve-orch` / `make serve-leaf` targets.
 ## Development
 
 ```bash
-make test                    # unit tests (no network, no Deno)
+make test                    # offline suite (unit + integration + e2e; no network, no Deno)
 make lint                    # ruff
+make cov                     # offline suite with the 80% coverage gate
 ```
+
+The suite runs fully offline and deterministically: a local OpenAI-compatible stub
+server stands in for the model, so the integration and e2e tests exercise the real code
+path (the `rrlm-solve` CLI, the library, and the predict-rlm REPL loop) with no LLM-call
+mocks. Combined coverage of `src/rrlm/` is ~98%, gated at 80% by `make cov` and CI.
+
+### CI (Dagger, provider-agnostic)
+
+CI is a [Dagger](https://dagger.io) module (`dagger/`), not a provider workflow.
+It runs the same offline suite as `make cov`, in a container, anywhere with a
+container runtime (Docker is fine):
+
+```bash
+make ci                      # = dagger call ci : lint, then the 80% coverage gate
+```
+
+Install the Dagger CLI once (`curl -fsSL https://dl.dagger.io/dagger/install.sh | sh`,
+or `brew install dagger/tap/dagger`; docs at https://docs.dagger.io), then any CI
+provider runs the exact same gate with one command: `dagger call ci`. See
+[docs/CI.md](docs/CI.md).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed.
