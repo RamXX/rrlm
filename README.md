@@ -2,8 +2,8 @@
 
 [![CI: Dagger](https://img.shields.io/badge/CI-Dagger-131226?logo=dagger&logoColor=white)](docs/CI.md)
 [![not GitHub Actions](https://img.shields.io/badge/not-GitHub%20Actions-lightgrey)](docs/CI.md)
-[![coverage 98%](https://img.shields.io/badge/coverage-98%25-brightgreen)](docs/CI.md)
-[![tests 130 passing](https://img.shields.io/badge/tests-130%20passing-brightgreen)](tests)
+[![coverage 97%](https://img.shields.io/badge/coverage-97%25-brightgreen)](docs/CI.md)
+[![tests 151 passing](https://img.shields.io/badge/tests-151%20passing-brightgreen)](tests)
 [![license MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 > CI runs as a provider-agnostic [Dagger](https://dagger.io) pipeline (`make ci`), not
@@ -80,6 +80,8 @@ uv tool install .        # optional: install the rrlm-solve / rrlm-traces CLIs
   run CI locally (the Dagger pipeline, `make ci`) or use the `sbx` sandbox backend. The
   `sbx` backend additionally needs the `sbx` CLI (`brew install docker/tap/sbx`, then
   `sbx login`).
+- The optional `web` extra (`uv tool install 'rrlm[web]'` or `uv sync --extra web`),
+  only if you use live web access (`--web`); see [Live web access](#live-web-access-opt-in).
 - A model configured in Pi (see below), or an `OPENROUTER_API_KEY`.
 
 ## Use it
@@ -157,6 +159,26 @@ predict-rlm):
   isolation; needs Docker and the `sbx` CLI; auto-reuses a warm container to keep
   per-call overhead low). See [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
 
+## Live web access (opt-in)
+
+By default the agent answers from the data you give it. Add `--web` (or env
+`RRLM_WEB=1`) and it gets two host-side tools, `web_search(query)` and
+`fetch(url)`, plus a doctrine to *retrieve and verify instead of answering from
+memory*. So "What is the capital of France?" is answered by writing code that
+searches, fetches the source, extracts the fact, and cross-checks it, not by
+recalling pretraining.
+
+```bash
+uv tool install 'rrlm[web]'                  # adds the keyless deps (ddgs + trafilatura)
+rrlm-solve --web -i "What is the capital of France? Cite your source."
+```
+
+The tools run on the host (predict-rlm bridges tool calls back), so they work on
+every backend (`supervisor`, `jspi`, `sbx`) with no network opened inside the
+sandbox: the model's own code stays isolated and reaches the web *only* through
+these two vetted functions. Retrieval is keyless (DuckDuckGo search + main-text
+extraction). See [`src/rrlm/webtools.py`](src/rrlm/webtools.py).
+
 ## Reproduce the benchmarks
 
 The research side lives in `src/rrlm/bench/` and writes per-run artifacts under
@@ -204,7 +226,7 @@ make cov                     # offline suite with the 80% coverage gate
 The suite runs fully offline and deterministically: a local OpenAI-compatible stub
 server stands in for the model, so the integration and e2e tests exercise the real code
 path (the `rrlm-solve` CLI, the library, and the predict-rlm REPL loop) with no LLM-call
-mocks. Combined coverage of `src/rrlm/` is 98.03%, gated at 80% by `make cov` and CI.
+mocks. Combined coverage of `src/rrlm/` is 97%, gated at 80% by `make cov` and CI.
 
 ### CI (Dagger, provider-agnostic)
 

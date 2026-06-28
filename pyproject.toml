@@ -26,6 +26,15 @@ dependencies = [
     "python-dotenv>=1.2.2",
 ]
 
+[project.optional-dependencies]
+# Live web retrieval for the agent (rrlm.webtools): keyless DuckDuckGo search +
+# main-text extraction. Enable with `rrlm-solve --web` / RRLM_WEB=1. httpx is
+# already a base dependency.
+web = [
+    "ddgs>=6.0",
+    "trafilatura>=1.12",
+]
+
 [project.urls]
 Homepage = "https://github.com/RamXX/rrlm"
 Repository = "https://github.com/RamXX/rrlm"

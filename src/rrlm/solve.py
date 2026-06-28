@@ -50,6 +50,7 @@ def solve(
     max_llm_calls: int = 50,
     max_action_retries: int = 2,
     timeout_s: float | None = None,
+    web: bool = False,
     reconcile_cost: bool = True,
 ) -> dict:
     """Run the RLM-first agent over (instruction, data); return answer + metrics.
@@ -63,6 +64,10 @@ def solve(
     settled finding: orchestrator thinking adds latency/variance without
     accuracy) and ``default`` otherwise. ``max_action_retries`` is applied only
     when the installed predict-rlm supports per-turn action retries.
+
+    ``web=True`` gives the agent host-side ``web_search`` / ``fetch`` tools plus a
+    doctrine to retrieve-and-verify instead of answering from memory (needs the
+    optional ``web`` extra: ddgs + trafilatura). It works on every backend.
     """
     # Load .env first so OPENROUTER_API_KEY (the no-Pi path) is visible to model
     # resolution and to cost reconciliation.
@@ -87,6 +92,7 @@ def solve(
         max_llm_calls=max_llm_calls,
         sandbox_exec_timeout=3600.0 if local else 300.0,
         max_action_retries=max_action_retries,
+        web=web,
     )
 
     # Clamp per-turn caps to each model's real output limit so smaller models in
@@ -145,6 +151,7 @@ def solve(
             "sub_model": sub.ref,
             "reasoning": reasoning,
             "backend": backend,
+            "web": web,
         },
     }
 
@@ -235,8 +242,16 @@ def main() -> None:
     parser.add_argument("--max-llm-calls", type=int, default=50,
                         help="hard cap on sub-LM (predict) calls, the de-facto spend ceiling")
     parser.add_argument("--max-iterations", type=int, default=30, help="hard cap on REPL turns")
+    parser.add_argument(
+        "--web", action="store_true", default=None,
+        help="give the agent live web retrieval (web_search/fetch); env RRLM_WEB; needs the 'web' extra",
+    )
     parser.add_argument("--json", action="store_true", help="emit full result JSON, not just the answer")
     args = parser.parse_args()
+
+    web = args.web
+    if web is None:
+        web = os.environ.get("RRLM_WEB", "").strip().lower() in ("1", "true", "yes", "on")
 
     timeout_s = args.timeout
     if timeout_s is None and os.environ.get("RRLM_TIMEOUT"):
@@ -258,6 +273,7 @@ def main() -> None:
         max_llm_calls=args.max_llm_calls,
         max_action_retries=args.action_retries,
         timeout_s=timeout_s,
+        web=web,
     )
 
     if args.json:
