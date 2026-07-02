@@ -21,8 +21,12 @@ main-text extraction. Install the optional extra:
 from __future__ import annotations
 
 import asyncio
+import ipaddress
+import os
 import re
+import socket
 from collections.abc import Callable
+from urllib.parse import urljoin, urlparse
 
 _MISSING = (
     "rrlm web tools need the optional 'web' extra. Install with "
@@ -30,6 +34,48 @@ _MISSING = (
 )
 # A polite, identifiable UA. Some sites block the default httpx UA outright.
 _UA = "Mozilla/5.0 (compatible; rrlm-web/1.0; +https://github.com/RamXX/rrlm)"
+
+_MAX_REDIRECTS = 5
+
+
+def _private_fetch_allowed() -> bool:
+    """RRLM_WEB_ALLOW_PRIVATE=1 disables the SSRF guard (trusted intranet use)."""
+    return os.environ.get("RRLM_WEB_ALLOW_PRIVATE", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _url_blocked(url: str) -> str | None:
+    """SSRF guard: reject URLs whose host resolves to a non-public address.
+
+    ``fetch`` runs HOST-side, outside the sandbox, so without this check the
+    model's code could reach localhost services, RFC-1918 intranet hosts, or
+    cloud metadata endpoints (169.254.169.254) through it. Every redirect hop
+    is re-checked. Returns a reason string when blocked, None when allowed.
+    Resolution failures are not blocked here; the fetch itself will fail with
+    a clearer connection error.
+    """
+    if _private_fetch_allowed():
+        return None
+    host = urlparse(url).hostname
+    if not host:
+        return f"no hostname in url {url!r}"
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return None  # let the request fail naturally with a connect error
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if not ip.is_global:
+            return (
+                f"host {host!r} resolves to the non-public address {ip}; "
+                "fetch() only reaches the public web (set RRLM_WEB_ALLOW_PRIVATE=1 "
+                "to allow private addresses in a trusted environment)"
+            )
+    return None
 
 
 def _import_ddgs():
@@ -91,8 +137,9 @@ async def fetch(url: str, max_chars: int = 8000) -> str:
     Use after ``web_search`` to read a specific result. Returns the extracted
     article text (via ``trafilatura``), truncated to ``max_chars``; navigation,
     ads, and markup are stripped. On any failure it returns an error string, so
-    do not assume success: check the result. This is awaitable, and independent
-    fetches can be batched with ``asyncio.gather``.
+    do not assume success: check the result. Only public web addresses are
+    reachable (private/loopback/metadata hosts are refused). This is awaitable,
+    and independent fetches can be batched with ``asyncio.gather``.
     """
     url = (url or "").strip()
     if not (url.startswith("http://") or url.startswith("https://")):
@@ -103,12 +150,25 @@ async def fetch(url: str, max_chars: int = 8000) -> str:
         return _MISSING
 
     try:
+        # Redirects are followed manually so EVERY hop passes the SSRF guard
+        # (a public page redirecting to an internal address must not work).
         async with httpx.AsyncClient(
-            follow_redirects=True, timeout=20.0, headers={"User-Agent": _UA}
+            follow_redirects=False, timeout=20.0, headers={"User-Agent": _UA}
         ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            html = resp.text
+            current = url
+            for _ in range(_MAX_REDIRECTS + 1):
+                blocked = await asyncio.to_thread(_url_blocked, current)
+                if blocked:
+                    return f"fetch blocked: {blocked}"
+                resp = await client.get(current)
+                if resp.is_redirect and resp.headers.get("location"):
+                    current = urljoin(current, resp.headers["location"])
+                    continue
+                resp.raise_for_status()
+                html = resp.text
+                break
+            else:
+                return f"fetch error: more than {_MAX_REDIRECTS} redirects from {url!r}"
     except Exception as exc:  # noqa: BLE001
         return f"fetch error: {type(exc).__name__}: {exc}"
 

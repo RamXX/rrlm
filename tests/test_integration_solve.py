@@ -159,3 +159,104 @@ def test_separate_sub_model_resolves_and_runs(stub_model):
     assert result["error"] is None
     assert result["answer"] == "negative"
     assert result["config"]["sub_model"] == model
+
+
+@pytest.mark.integration
+def test_asolve_runs_inside_an_existing_event_loop(stub_model):
+    """The async entry point works from async callers (servers, other agents)."""
+    import asyncio
+
+    from rrlm import asolve
+
+    model = stub_model("submit")
+
+    async def caller():
+        return await asolve(
+            "compute it", "xyz", main_model=model, backend="supervisor", max_iterations=5
+        )
+
+    result = asyncio.run(caller())
+    assert result["error"] is None
+    assert result["answer"] == "3"
+
+
+@pytest.mark.integration
+def test_typed_answer_parses_to_int(stub_model):
+    """typed scenario: SUBMIT(answer=len(data)) with answer_type=int returns a
+    real int, not a string."""
+    model = stub_model("typed")
+    result = solve(
+        "how many characters?", "hello", main_model=model,
+        backend="supervisor", max_iterations=5, answer_type=int,
+    )
+    assert result["error"] is None
+    assert result["answer"] == 5
+    assert isinstance(result["answer"], int)
+
+
+@pytest.mark.integration
+def test_file_input_is_mounted_and_readable(stub_model, tmp_path):
+    """filesread scenario: a real host file is mounted into the sandbox; the
+    REPL opens the mounted path and submits its actual content."""
+    payload = tmp_path / "payload.txt"
+    payload.write_text("file-content-42\n", encoding="utf-8")
+    model = stub_model("filesread")
+    result = solve(
+        "read the mounted file", "", main_model=model,
+        backend="supervisor", max_iterations=5, files=[payload],
+    )
+    assert result["error"] is None
+    assert result["answer"] == "file-content-42"
+
+
+@pytest.mark.integration
+def test_missing_input_file_fails_fast(stub_model, tmp_path):
+    model = stub_model("submit")
+    with pytest.raises(FileNotFoundError, match="not found"):
+        solve("read it", "", main_model=model, files=[tmp_path / "nope.pdf"])
+
+
+@pytest.mark.integration
+def test_solve_many_answers_in_one_run(stub_model):
+    """listsubmit scenario: several questions, ONE run, answers list aligned."""
+    from rrlm import solve_many
+
+    model = stub_model("listsubmit")
+    result = solve_many(
+        ["how long is the data?", "what comes second?"], "hello",
+        main_model=model, backend="supervisor", max_iterations=5,
+    )
+    assert result["error"] is None
+    assert result["answers"] == ["5", "second-answer"]
+    # one run: a single action turn served both questions
+    assert result["usage"]["by_role"]["main"]["calls"] == 1
+
+
+@pytest.mark.integration
+def test_global_sub_call_budget_blocks_fanout(stub_model):
+    """predict scenario with a zero sub-call budget: the fan-out is refused
+    before any leaf HTTP call, so the sub role never appears in usage."""
+    model = stub_model("predict")
+    result = solve(
+        "classify", "some text", main_model=model,
+        backend="supervisor", max_iterations=2, max_llm_calls=0,
+    )
+    # The leaf label can never be produced; whether the run ends in the extract
+    # fallback or an error, no sub-LM call may have been made.
+    assert result["answer"] != "negative"
+    assert "sub" not in result["usage"]["by_role"]
+
+
+@pytest.mark.integration
+def test_spawn_budget_refusal_reaches_the_model(stub_model):
+    """spawn scenario with max_spawns=0: rlm_spawn returns a refusal string the
+    orchestrator can act on (here it submits it, proving the code path)."""
+    model = stub_model("spawn")
+    result = solve(
+        "delegate a slice", "abcdefghijklmnopqrstuvwxyz", main_model=model,
+        backend="supervisor", max_iterations=3, max_depth=1, max_spawns=0,
+    )
+    assert result["error"] is None
+    assert result["answer"].startswith("spawned:")
+    assert "rlm_spawn refused" in result["answer"]
+    assert result["spawn_stats"] == {}  # nothing actually spawned

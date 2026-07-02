@@ -79,8 +79,10 @@ class ResolvedModel:
     supports_reasoning: bool = False
     # How to request reasoning on/off: OpenRouter uses a `reasoning` body field;
     # OpenAI-compatible chat servers (qwen/glm/gemma family) use a chat-template
-    # kwarg; anything else can't be toggled generically.
-    reasoning_style: str = "none"  # "openrouter" | "chat_template" | "none"
+    # kwarg; hosted first-party APIs (Anthropic, OpenAI, Gemini, ...) take
+    # litellm's standardized `reasoning_effort` and reject unknown body fields,
+    # so they get "native"; anything else can't be toggled generically.
+    reasoning_style: str = "none"  # "openrouter" | "chat_template" | "native" | "none"
     is_local: bool = False
     needs_json_schema: bool = False  # LM Studio rejects response_format json_object
     openrouter_routing: dict | None = None  # optional provider pin from models.json
@@ -183,9 +185,19 @@ def _needs_json_schema(provider: str, base_url: str | None) -> bool:
     return "lmstudio" in hay or "lm-studio" in hay or ":1234" in hay
 
 
-def _reasoning_style(provider: str, api_kind: str) -> str:
+def _reasoning_style(provider: str, api_kind: str, *, hosted_builtin: bool = False) -> str:
+    """Pick how (and whether) reasoning can be toggled for this endpoint.
+
+    Hosted first-party APIs (the built-in providers minus OpenRouter) are
+    strict about unknown request fields: Anthropic 400s on any stray key and
+    OpenAI rejects unrecognized arguments, so they must NOT get the
+    ``chat_template_kwargs`` toggle meant for self-hosted OpenAI-compatible
+    servers. They get "native": litellm's standardized ``reasoning_effort``.
+    """
     if provider == "openrouter":
         return "openrouter"
+    if hosted_builtin:
+        return "native"
     if api_kind in ("openai-completions", "openai-responses"):
         return "chat_template"
     return "none"
@@ -274,7 +286,10 @@ def _resolve_builtin(cfg: PiConfig, provider: str, model_id: str, ref: str) -> R
         context_window=int(mdef.get("contextWindow", DEFAULT_CONTEXT_WINDOW)),
         max_tokens=int(mdef.get("maxTokens", DEFAULT_MAX_TOKENS)),
         supports_reasoning=bool(mdef.get("reasoning", provider in ("anthropic", "openai", "google"))),
-        reasoning_style=_reasoning_style(provider, "openai-completions"),
+        # A baseUrl override re-routes the builtin through an OpenAI-compatible
+        # server (litellm_id becomes openai/<model>), so it behaves like a
+        # custom provider; without one this is the strict first-party API.
+        reasoning_style=_reasoning_style(provider, "openai-completions", hosted_builtin=not base),
         is_local=_is_local_url(base),
         needs_json_schema=_needs_json_schema(provider, base),
         openrouter_routing=routing,

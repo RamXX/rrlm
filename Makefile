@@ -24,12 +24,17 @@ RUNNER_ARGS = --model $(MAIN) --sub-model $(SUB) --reasoning $(REASONING) --seed
 INSTRUCTION ?= Which product id has the most negative reviews? Answer with the id only.
 DATA ?= -
 
-.PHONY: setup test cov coverage lint ci ci-lint ci-test smoke baseline compare \
+.PHONY: setup doctor test cov coverage lint ci ci-lint ci-test smoke baseline compare \
         report clean-runs solve pi-run eval-tabular eval-bugfind eval-pi eval-crm \
         serve-orch serve-leaf serve-stop serve-purge
 
 setup:
 	uv sync
+
+# Environment report: versions, Pi config, credentials, backends, extras,
+# local server reachability. Run this first when something does not work.
+doctor:
+	$(RUN) rrlm-doctor
 
 # Fast, fully offline run: unit + integration + e2e. The integration/e2e tests
 # drive a real local OpenAI-compatible stub server (a subprocess, no mocks, no

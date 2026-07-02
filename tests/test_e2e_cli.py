@@ -210,3 +210,112 @@ def test_library_solve_entrypoint(stub_model):
     )
     assert result["error"] is None
     assert result["answer"] == str(len("abcd"))
+
+
+# --------------------------------------------------------------------------- #
+# New CLI surfaces: defaults, env parity, typed answers, files, multi-question.
+# --------------------------------------------------------------------------- #
+@pytest.mark.e2e
+def test_main_default_backend_is_supervisor(stub_model, monkeypatch, capsys):
+    """No --backend flag, no RRLM_BACKEND: the default must be supervisor (the
+    documented no-Deno default)."""
+    model = stub_model("submit")
+    monkeypatch.setattr(
+        sys, "argv",
+        ["rrlm-solve", "-i", "go", "-d", "hello", "--main", model,
+         "--max-iterations", "5", "--json"],
+    )
+    S.main()
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["config"]["backend"] == "supervisor"
+    assert payload["answer"] == str(len("hello"))
+
+
+@pytest.mark.e2e
+def test_main_backend_env_is_honored(stub_model, monkeypatch, capsys):
+    model = stub_model("submit")
+    monkeypatch.setenv("RRLM_BACKEND", "supervisor")
+    monkeypatch.setattr(
+        sys, "argv",
+        ["rrlm-solve", "-i", "go", "-d", "x", "--main", model,
+         "--max-iterations", "5", "--json"],
+    )
+    S.main()
+    assert json.loads(capsys.readouterr().out)["config"]["backend"] == "supervisor"
+
+
+@pytest.mark.e2e
+def test_main_invalid_backend_env_fails_loudly(stub_model, monkeypatch):
+    model = stub_model("submit")
+    monkeypatch.setenv("RRLM_BACKEND", "firecracker")
+    monkeypatch.setattr(
+        sys, "argv",
+        ["rrlm-solve", "-i", "go", "-d", "x", "--main", model, "--max-iterations", "2"],
+    )
+    with pytest.raises(ValueError, match="unknown backend"):
+        S.main()
+
+
+@pytest.mark.e2e
+def test_main_env_main_model(stub_model, monkeypatch, capsys):
+    """RRLM_MAIN supplies the orchestrator when --main is omitted (extension parity)."""
+    model = stub_model("submit")
+    monkeypatch.setenv("RRLM_MAIN", model)
+    monkeypatch.setattr(
+        sys, "argv",
+        ["rrlm-solve", "-i", "go", "-d", "hey", "--max-iterations", "5"],
+    )
+    S.main()
+    assert capsys.readouterr().out.strip() == str(len("hey"))
+
+
+@pytest.mark.e2e
+def test_main_answer_type_int(stub_model, monkeypatch, capsys):
+    model = stub_model("typed")
+    monkeypatch.setattr(
+        sys, "argv",
+        ["rrlm-solve", "-i", "count chars", "-d", "hello", "--main", model,
+         "--max-iterations", "5", "--answer-type", "int", "--json"],
+    )
+    S.main()
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["answer"] == 5  # a real JSON number, not "5"
+
+
+@pytest.mark.e2e
+def test_main_file_flag_mounts_file(stub_model, monkeypatch, capsys, tmp_path):
+    payload_file = tmp_path / "doc.txt"
+    payload_file.write_text("mounted-content\n", encoding="utf-8")
+    model = stub_model("filesread")
+    monkeypatch.setattr(
+        sys, "argv",
+        ["rrlm-solve", "-i", "read the file", "--file", str(payload_file),
+         "--main", model, "--max-iterations", "5"],
+    )
+    S.main()
+    assert capsys.readouterr().out.strip() == "mounted-content"
+
+
+@pytest.mark.e2e
+def test_main_multi_instruction_prints_one_answer_per_line(stub_model, monkeypatch, capsys):
+    model = stub_model("listsubmit")
+    monkeypatch.setattr(
+        sys, "argv",
+        ["rrlm-solve", "-i", "how long?", "-i", "second?", "-d", "hello",
+         "--main", model, "--max-iterations", "5"],
+    )
+    S.main()
+    assert capsys.readouterr().out.strip().splitlines() == ["5", "second-answer"]
+
+
+@pytest.mark.e2e
+def test_cli_subprocess_multi_instruction(stub_model):
+    """The multi-question path through the real console script."""
+    model = stub_model("listsubmit")
+    proc = subprocess.run(
+        [*_cli(), "-i", "q1", "-i", "q2", "-d", "hello", "--main", model,
+         "--max-iterations", "5"],
+        capture_output=True, text=True, env=_subprocess_env(), timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip().splitlines() == ["5", "second-answer"]

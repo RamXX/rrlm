@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import ipaddress
+import socket
 import sys
 import types
 
 import httpx
+import pytest
 import respx
 
 from rrlm.config import HarnessConfig
@@ -22,6 +25,23 @@ from rrlm.pi_config import ResolvedModel
 
 W = importlib.import_module("rrlm.webtools")
 S = importlib.import_module("rrlm.solve")
+
+
+@pytest.fixture(autouse=True)
+def _offline_dns(monkeypatch):
+    """Keep the suite offline: the SSRF guard resolves hostnames, so answer
+    locally. IP literals resolve to themselves; every name maps to a fixed,
+    globally-routable address (documentation ranges are NOT is_global)."""
+
+    def fake_getaddrinfo(host, *args, **kwargs):
+        try:
+            ipaddress.ip_address(host)
+            ip = host
+        except ValueError:
+            ip = "93.184.216.34"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
 
 
 # --- helpers --------------------------------------------------------------- #
@@ -190,6 +210,92 @@ def test_fetch_missing_trafilatura(monkeypatch):
     monkeypatch.setitem(sys.modules, "trafilatura", None)  # import raises ImportError
     out = asyncio.run(W.fetch("https://example.com/c"))
     assert "optional 'web' extra" in out
+
+
+# --- SSRF guard ------------------------------------------------------------ #
+def test_fetch_blocks_loopback_literal():
+    out = asyncio.run(W.fetch("http://127.0.0.1:9999/admin"))
+    assert out.startswith("fetch blocked:")
+    assert "non-public address" in out
+
+
+def test_fetch_blocks_metadata_endpoint():
+    # The classic cloud-credential SSRF target must be unreachable.
+    out = asyncio.run(W.fetch("http://169.254.169.254/latest/meta-data/"))
+    assert out.startswith("fetch blocked:")
+
+
+def test_fetch_blocks_private_range():
+    out = asyncio.run(W.fetch("http://10.0.0.8/internal"))
+    assert out.startswith("fetch blocked:")
+
+
+def test_fetch_blocks_hostname_resolving_private(monkeypatch):
+    def resolve_private(host, *a, **k):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.5", 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve_private)
+    out = asyncio.run(W.fetch("https://internal.corp.example/"))
+    assert out.startswith("fetch blocked:")
+    assert "internal.corp.example" in out
+
+
+@respx.mock
+def test_fetch_blocks_redirect_to_private(monkeypatch):
+    """A public page 302-ing to an internal address must be refused: every
+    redirect hop passes the guard, not just the first URL."""
+    respx.get("https://example.com/redir").mock(
+        return_value=httpx.Response(302, headers={"location": "http://10.0.0.9/secret"})
+    )
+    _inject_trafilatura(monkeypatch, lambda html, **k: "never reached")
+    out = asyncio.run(W.fetch("https://example.com/redir"))
+    assert out.startswith("fetch blocked:")
+    assert "10.0.0.9" in out
+
+
+@respx.mock
+def test_fetch_follows_public_redirects(monkeypatch):
+    respx.get("https://example.com/old").mock(
+        return_value=httpx.Response(301, headers={"location": "https://example.com/new"})
+    )
+    respx.get("https://example.com/new").mock(
+        return_value=httpx.Response(200, html="<html><body><p>moved here</p></body></html>")
+    )
+    _inject_trafilatura(monkeypatch, lambda html, **k: "moved here")
+    assert asyncio.run(W.fetch("https://example.com/old")) == "moved here"
+
+
+@respx.mock
+def test_fetch_gives_up_after_too_many_redirects(monkeypatch):
+    respx.get("https://example.com/loop").mock(
+        return_value=httpx.Response(302, headers={"location": "https://example.com/loop"})
+    )
+    _inject_trafilatura(monkeypatch, lambda html, **k: "never reached")
+    out = asyncio.run(W.fetch("https://example.com/loop"))
+    assert "redirects" in out and out.startswith("fetch error:")
+
+
+@respx.mock
+def test_fetch_private_allowed_with_env(monkeypatch):
+    """RRLM_WEB_ALLOW_PRIVATE=1 is the trusted-intranet escape hatch."""
+    monkeypatch.setenv("RRLM_WEB_ALLOW_PRIVATE", "1")
+    respx.get("http://127.0.0.1:9999/status").mock(
+        return_value=httpx.Response(200, html="<html><body>intranet ok</body></html>")
+    )
+    _inject_trafilatura(monkeypatch, lambda html, **k: "intranet ok")
+    assert asyncio.run(W.fetch("http://127.0.0.1:9999/status")) == "intranet ok"
+
+
+def test_fetch_unresolvable_host_not_blocked_by_guard(monkeypatch):
+    """Resolution failure is not a block: the request itself fails with a
+    clearer connection error."""
+
+    def raise_gaierror(host, *a, **k):
+        raise OSError("name or service not known")
+
+    monkeypatch.setattr(socket, "getaddrinfo", raise_gaierror)
+    out = asyncio.run(W.fetch("https://no-such-host.invalid/"))
+    assert out.startswith("fetch error:")  # connect failure, not "fetch blocked"
 
 
 # --- harness wiring -------------------------------------------------------- #

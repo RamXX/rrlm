@@ -22,6 +22,11 @@ scenario a test needs (the LM's ``api_base`` carries the prefix, e.g.
            exhausts ``max_iterations`` and falls through to the extract signature.
   slow     the server sleeps before answering an action call, so a wall-clock
            timeout on the caller's side fires against a genuinely slow endpoint.
+  spawn    one action turn spawns a child agent via rlm_spawn, then SUBMITs.
+  typed    SUBMITs a real int (exercises typed `answer: int` signatures).
+  filesread  reads the first mounted file (the `files` variable) and SUBMITs
+           its content (exercises File input mounting).
+  listsubmit  SUBMITs a list[str] (exercises solve_many / list answers).
 
 The action vs extract vs leaf-predict call is told apart by the dspy ChatAdapter
 output-field markers present in the request body (``[[ ## code ## ]]`` for an
@@ -89,6 +94,17 @@ _SPAWN_CODE = (
     'res = await rlm_spawn("leaf subtask", data[:20])\n'
     'SUBMIT(answer="spawned:" + str(res))'
 )
+# Typed answers: SUBMIT a real int, parsed back into an `answer: int` signature.
+_TYPED_CODE = "SUBMIT(answer=len(data))"
+# File inputs: the `files` REPL variable lists the mounted sandbox paths; read
+# the first file's real content and submit it.
+_FILES_CODE = (
+    "with open(files[0], encoding='utf-8') as fh:\n"
+    "    content = fh.read()\n"
+    "SUBMIT(answer=content.strip())"
+)
+# Multi-question runs: SUBMIT a list[str], one answer per question.
+_LIST_CODE = 'SUBMIT(answer=[str(len(data)), "second-answer"])'
 
 
 def _select_content(mode: str, body: str, slow_seconds: float) -> str:
@@ -106,6 +122,12 @@ def _select_content(mode: str, body: str, slow_seconds: float) -> str:
             return _action("fan out one leaf predict", _PREDICT_CODE)
         if mode == "spawn":
             return _action("spawn a child over a slice", _SPAWN_CODE)
+        if mode == "typed":
+            return _action("submit a typed (int) answer", _TYPED_CODE)
+        if mode == "filesread":
+            return _action("read the mounted file and submit its content", _FILES_CODE)
+        if mode == "listsubmit":
+            return _action("submit one answer per question", _LIST_CODE)
         return _action("compute the answer from data", _SUBMIT_CODE)
     if is_leaf:
         # Leaf predict() sub-call: return the single declared output field.

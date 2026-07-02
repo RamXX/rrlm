@@ -34,6 +34,10 @@ web = [
     "ddgs>=6.0",
     "trafilatura>=1.12",
 ]
+# RLM-GEPA doctrine optimization (rrlm.gepa / the rrlm-gepa CLI).
+gepa = [
+    "predict-rlm[gepa]>=0.7.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/RamXX/rrlm"
@@ -45,6 +49,8 @@ rrlm-solve = "rrlm.solve:main"
 rrlm-bench = "rrlm.bench.runner:main"
 rrlm-report = "rrlm.bench.report:main"
 rrlm-traces = "rrlm.traces:main"
+rrlm-doctor = "rrlm.doctor:main"
+rrlm-gepa = "rrlm.gepa:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -57,6 +63,8 @@ dev = [
     "pytest-cov>=7.1.0",
     "respx>=0.23.1",
     "ruff>=0.9.0",
+    # the [gepa] extra, so the offline rrlm.gepa tests run in dev and CI
+    "predict-rlm[gepa]>=0.7.0",
 ]
 
 [tool.pytest.ini_options]

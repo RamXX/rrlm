@@ -286,6 +286,10 @@ Key findings:
   nudge-retry. Matches the LM Studio official 4/4 (also autoregressive serving).
 - **Supervisor backend (predict-rlm 0.7 DirectPythonBackend) rejected:** it
   deadlocked after ~11 turns and leaked subprocesses. Use jspi/sbx.
+  > Superseded: this was observed on a 0.7.0-alpha build. On stock predict-rlm
+  > 0.7.0 from PyPI the supervisor backend runs the full offline suite and daily
+  > use cleanly, and it is now the rrlm default (no Deno/Docker required); jspi
+  > and sbx remain the isolation options. Kept as a dated lab record.
 - **Action-generation retry (local predict-rlm branch, not upstreamed):** the
   retry must change the *prompt* (a nudge naming the parse failure), not just
   sampling, deterministic backends ignore temperature, so plain re-ask and

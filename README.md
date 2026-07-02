@@ -2,14 +2,14 @@
 
 [![CI: Dagger](https://img.shields.io/badge/CI-Dagger-131226?logo=dagger&logoColor=white)](docs/CI.md)
 [![not GitHub Actions](https://img.shields.io/badge/not-GitHub%20Actions-lightgrey)](docs/CI.md)
-[![coverage 97%](https://img.shields.io/badge/coverage-97%25-brightgreen)](docs/CI.md)
-[![tests 151 passing](https://img.shields.io/badge/tests-151%20passing-brightgreen)](tests)
+[![coverage 96%](https://img.shields.io/badge/coverage-96%25-brightgreen)](docs/CI.md)
+[![tests 226 passing](https://img.shields.io/badge/tests-226%20passing-brightgreen)](tests)
 [![license MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 > CI runs as a provider-agnostic [Dagger](https://dagger.io) pipeline (`make ci`), not
 > GitHub Actions. These are static badges reflecting the gate (`dagger call ci`: ruff +
-> the 98% offline suite, 80% floor); wire any provider to `dagger call ci` for live
-> status. See [docs/CI.md](docs/CI.md).
+> the fully offline suite, 80% coverage floor); wire any provider to `dagger call ci`
+> for live status. See [docs/CI.md](docs/CI.md).
 
 An **RLM-first backend for the [Pi coding agent](https://github.com/earendil-works/pi)**,
 and a demonstration that the Recursive Language Model (RLM) is a **posture for quality
@@ -53,7 +53,7 @@ it to use the model Pi is currently set to.
 rrlm is not published to a package index. Install it from source.
 
 One-line install (clones into `~/.rrlm`, sets up the virtualenv, and puts the
-`rrlm-solve` and `rrlm-traces` commands on your PATH via `uv`):
+`rrlm-solve`, `rrlm-traces`, and `rrlm-doctor` commands on your PATH via `uv`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/RamXX/rrlm/main/install.sh | bash
@@ -64,7 +64,7 @@ Or do it by hand:
 ```bash
 git clone https://github.com/RamXX/rrlm && cd rrlm
 uv sync                  # development: run via `make` / `uv run`
-uv tool install .        # optional: install the rrlm-solve / rrlm-traces CLIs
+uv tool install .        # optional: install the rrlm-solve / rrlm-traces / rrlm-doctor CLIs
 ```
 
 ### Prerequisites
@@ -72,17 +72,22 @@ uv tool install .        # optional: install the rrlm-solve / rrlm-traces CLIs
 - [`uv`](https://docs.astral.sh/uv/), the Python package manager this project uses.
   Install with `curl -LsSf https://astral.sh/uv/install.sh | sh` (the one-line
   installer above bootstraps `uv` for you if it is missing).
-- [Deno](https://deno.land), only if you use the default Pyodide sandbox (the `jspi`
-  backend). Install with `curl -fsSL https://deno.land/install.sh | sh`, or `brew
+- [Deno](https://deno.land), only if you opt into the Pyodide sandbox (`--backend
+  jspi`). Install with `curl -fsSL https://deno.land/install.sh | sh`, or `brew
   install deno`, or follow the [Deno install guide](https://docs.deno.com/runtime/getting_started/installation/).
-  The `supervisor` backend (the `rrlm-solve` default) needs no Deno.
+  The default `supervisor` backend needs no Deno.
 - [Docker](https://www.docker.com/) (or another container runtime), only if you want to
   run CI locally (the Dagger pipeline, `make ci`) or use the `sbx` sandbox backend. The
   `sbx` backend additionally needs the `sbx` CLI (`brew install docker/tap/sbx`, then
   `sbx login`).
 - The optional `web` extra (`uv tool install 'rrlm[web]'` or `uv sync --extra web`),
   only if you use live web access (`--web`); see [Live web access](#live-web-access-opt-in).
-- A model configured in Pi (see below), or an `OPENROUTER_API_KEY`.
+- A model configured in Pi (see below), or an `OPENROUTER_API_KEY`. No Pi at all is
+  fine too: any built-in provider works with an explicit reference plus its usual env
+  key, e.g. `rrlm-solve --main openai/gpt-5.1 ...` with `OPENAI_API_KEY` set.
+
+Run `rrlm-doctor` any time to check all of the above (versions, Pi config,
+credentials, backends, extras, and whether your local model servers are up).
 
 ## Use it
 
@@ -124,14 +129,39 @@ CLI or the Python library:
 rrlm-solve -i "Total revenue for completed EMEA orders." -d @orders.csv
 echo "<data>" | rrlm-solve -i "..." -d -
 rrlm-solve -i "..." -d @data.txt --main openrouter/qwen/qwen3.6-27b --json
+
+# typed answers: parse the result into a real type, not prose
+rrlm-solve -i "How many distinct customers?" -d @orders.csv --answer-type int
+
+# real files (PDF / XLSX / DOCX / CSV / anything): mounted into the sandbox,
+# with the matching document skills attached automatically
+rrlm-solve -i "Sum the invoice totals." --file q1.pdf --file q2.pdf --answer-type float
+
+# several questions over the same data in ONE run (data loads once)
+rrlm-solve -i "Total revenue?" -i "Top product id?" -i "How many rows?" -d @orders.csv
 ```
 
 ```python
-from rrlm import solve
+from rrlm import solve, asolve, solve_many
 
 result = solve("Which product id has the most negative reviews?", data=text)
 print(result["answer"], result["usage"]["cost_usd"])
+
+# typed answers, file mounting, and your own host-side tools
+result = solve("Extract the total.", files=["invoice.pdf"], answer_type=float,
+               tools=[my_lookup_fn])
+
+# several questions, one amortized run
+result = solve_many(["Total revenue?", "Top product?"], data=text)
+print(result["answers"])
+
+# async twin for servers / other agents (same parameters)
+result = await asolve("...", data=text)
 ```
+
+On the `jspi` backend, document-skill packages (pymupdf, openpyxl, python-docx)
+install automatically inside the sandbox; on `supervisor`/`sbx`, install them in
+the environment rrlm runs in if your task needs them.
 
 ## How the harness decides
 
@@ -142,22 +172,52 @@ working set is too large, and verify before answering. Orchestrator thinking
 defaults to off (it adds latency and variance without accuracy here); point the leaf
 (`--sub`) at a cheap non-thinking model to make the fan-out path inexpensive.
 
+The doctrine text is swappable: `--doctrine <file>` (or `solve(..., doctrine=...)`)
+replaces it for a run, which is how an RLM-GEPA-optimized doctrine is deployed
+(see below).
+
 ## Guardrails, traces, and sandbox isolation
 
 All of these live at the rrlm layer (within predict-rlm's constructs; nothing patches
-predict-rlm):
+predict-rlm). The budgets are **global to the run**: they are shared across the whole
+`rlm_spawn` tree, so a recursing agent cannot multiply its allowance.
 
-- **Guardrails** (hard ceilings): `--timeout` (env `RRLM_TIMEOUT`) caps total
-  wall-clock and cancels an overrunning run; `--max-llm-calls` caps sub-LM calls (the
-  de-facto spend ceiling); `--max-iterations` caps REPL turns.
+- **Guardrails**: `--timeout` (env `RRLM_TIMEOUT`) caps total wall-clock and cancels
+  an overrunning run; `--max-llm-calls` caps sub-LM (`predict`) calls across all
+  depths; `--max-spawns` caps child agents; `--max-cost` (env `RRLM_MAX_COST`) is a
+  soft USD ceiling checked before each call (needs a cost-reporting provider such as
+  OpenRouter; local models are $0 and never trip it); `--max-iterations` caps REPL
+  turns per agent.
 - **Traces for optimization**: set `RRLM_TRACE_DIR` and every `rlm_solve` call writes
   its predict-rlm RunTrace plus an `index.jsonl` (instruction -> answer -> config),
-  the dataset for [RLM-GEPA](https://pypi.org/project/predict-rlm/). Inspect and curate
-  with `rrlm-traces list`, `rrlm-traces read --last`, `rrlm-traces grep <pattern>`.
-- **Execution sandbox** (`RRLM_BACKEND`): `supervisor` (host CPython, default, fastest),
-  `jspi` (Deno/Pyodide WASM, local, $0), or `sbx` (Docker Linux container, strongest
+  including failed runs, whose traces carry the strongest optimization signal.
+  Inspect and curate with `rrlm-traces list`, `rrlm-traces read --last`,
+  `rrlm-traces grep <pattern>`.
+- **Execution sandbox** (`--backend` / env `RRLM_BACKEND`): `supervisor` (host
+  CPython, the default: fastest, no extra runtime, fine for trusted data), `jspi`
+  (Deno/Pyodide WASM sandbox, local, $0), or `sbx` (Docker Linux container, strongest
   isolation; needs Docker and the `sbx` CLI; auto-reuses a warm container to keep
-  per-call overhead low). See [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
+  per-call overhead low). Prefer `jspi` or `sbx` when the data or task is untrusted.
+  See [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
+
+## Optimize the doctrine with RLM-GEPA (opt-in)
+
+The doctrine is a text component, so it is optimizable. `rrlm-gepa` (the `gepa`
+extra) runs [RLM-GEPA](https://pypi.org/project/predict-rlm/) with the real rrlm
+harness as the executor and your examples as the score:
+
+```bash
+uv sync --extra gepa                       # or: uv tool install 'rrlm[gepa]'
+export RRLM_GEPA_DATASET=examples.jsonl    # {"instruction","data"|"data_file","expected","checker"}
+export RRLM_MAIN=... RRLM_SUB=...          # models for the executor (Pi refs)
+rrlm-gepa optimize --check                 # validate wiring
+rrlm-gepa optimize --max-metric-calls 400  # evolve the doctrine
+rrlm-gepa stats runs/<run-dir>
+rrlm-solve --doctrine <winner.txt> ...     # deploy the winner
+```
+
+See `src/rrlm/gepa.py` for the dataset format (checkers: `exact`, `contains`,
+`number`) and details.
 
 ## Live web access (opt-in)
 
@@ -176,8 +236,11 @@ rrlm-solve --web -i "What is the capital of France? Cite your source."
 The tools run on the host (predict-rlm bridges tool calls back), so they work on
 every backend (`supervisor`, `jspi`, `sbx`) with no network opened inside the
 sandbox: the model's own code stays isolated and reaches the web *only* through
-these two vetted functions. Retrieval is keyless (DuckDuckGo search + main-text
-extraction). See [`src/rrlm/webtools.py`](src/rrlm/webtools.py).
+these two vetted functions. `fetch` refuses non-public addresses (localhost,
+RFC-1918 ranges, cloud metadata endpoints), re-checking every redirect hop, so
+the tools cannot be steered at your intranet; set `RRLM_WEB_ALLOW_PRIVATE=1` to
+lift that in a trusted environment. Retrieval is keyless (DuckDuckGo search +
+main-text extraction). See [`src/rrlm/webtools.py`](src/rrlm/webtools.py).
 
 ## Reproduce the benchmarks
 
@@ -226,7 +289,7 @@ make cov                     # offline suite with the 80% coverage gate
 The suite runs fully offline and deterministically: a local OpenAI-compatible stub
 server stands in for the model, so the integration and e2e tests exercise the real code
 path (the `rrlm-solve` CLI, the library, and the predict-rlm REPL loop) with no LLM-call
-mocks. Combined coverage of `src/rrlm/` is 97%, gated at 80% by `make cov` and CI.
+mocks. Combined coverage of `src/rrlm/` is 96%, gated at 80% by `make cov` and CI.
 
 ### CI (Dagger, provider-agnostic)
 

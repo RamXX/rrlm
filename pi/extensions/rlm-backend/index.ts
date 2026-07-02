@@ -8,15 +8,20 @@
 // Anthropic, z.ai, etc. Override per the env table below.
 //
 // Install (one of):
-//   - `uv tool install rrlm` (or pipx), then point pi at this extension; or
+//   - the install script (rrlm is installed from source, not a package index):
+//     `curl -fsSL https://raw.githubusercontent.com/RamXX/rrlm/main/install.sh | bash`
+//     then point pi at this extension; or
 //   - run from a checkout with RRLM_DIR set (uses `uv run` in that project).
 //
-// Env knobs:
-//   RRLM_MAIN     orchestrator model ref (Pi 'provider/model'); default: Pi's current model
-//   RRLM_SUB      leaf model ref for predict() fan-out; default: same as main
-//   RRLM_BACKEND  sandbox backend: 'jspi' (default), 'sbx', or 'supervisor'
-//   RRLM_WEB      '1' to give the agent live web retrieval (needs the rrlm 'web' extra)
-//   RRLM_DIR      project checkout to run via `uv run` (dev mode); unset = installed rrlm-solve
+// Env knobs (rrlm-solve reads these itself; they are inherited by the child
+// process, so setting them in Pi's environment is enough):
+//   RRLM_MAIN      orchestrator model ref (Pi 'provider/model'); default: Pi's current model
+//   RRLM_SUB       leaf model ref for predict() fan-out; default: same as main
+//   RRLM_BACKEND   sandbox backend: 'supervisor' (default), 'jspi', or 'sbx'
+//   RRLM_WEB       '1' to give the agent live web retrieval (needs the rrlm 'web' extra)
+//   RRLM_TIMEOUT   hard wall-clock ceiling in seconds for one rlm_solve call
+//   RRLM_MAX_COST  soft USD ceiling per call (cost-reporting providers only)
+//   RRLM_DIR       project checkout to run via `uv run` (dev mode); unset = installed rrlm-solve
 
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -26,7 +31,6 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
 const RRLM_DIR = process.env.RRLM_DIR;
-const BACKEND = process.env.RRLM_BACKEND ?? "jspi";
 const WEB = /^(1|true|yes|on)$/i.test(process.env.RRLM_WEB ?? "");
 
 // Best-effort: turn Pi's current Model object into an rrlm model reference
@@ -112,13 +116,14 @@ export default function (pi: ExtensionAPI) {
         dataArg = `@${dataFile}`;
       }
 
+      // Backend, web access, timeout, and cost ceiling are read by rrlm-solve
+      // itself from the inherited RRLM_* environment; only model overrides need
+      // to be passed explicitly (Pi's current model is not in the child's env).
       const solveArgs = [
         "--instruction", params.instruction,
         "--data", dataArg,
         ...(mainRef ? ["--main", mainRef] : []),
         ...(subRef ? ["--sub", subRef] : []),
-        "--backend", BACKEND,
-        ...(WEB ? ["--web"] : []),
         "--json",
       ];
       // Installed: call rrlm-solve on PATH. Dev: run it inside the checkout via uv.

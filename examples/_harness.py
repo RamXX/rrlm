@@ -29,7 +29,7 @@ def run_eval(
     """Run one eval; print a compact report; return True on pass."""
     main = os.environ.get("RRLM_MAIN") or None
     sub = os.environ.get("RRLM_SUB") or None
-    backend = backend or os.environ.get("RRLM_BACKEND", "jspi")
+    backend = backend or os.environ.get("RRLM_BACKEND") or "supervisor"
     print(f"[{name}] main={main or 'pi-default'} sub={sub or 'same-as-main'} backend={backend}")
     print(f"[{name}] data={len(data):,} chars; running ...")
 

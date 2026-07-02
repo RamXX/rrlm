@@ -44,14 +44,15 @@ cd "$RRLM_HOME"
 note "syncing dependencies (uv sync)"
 uv sync --quiet
 
-note "installing the rrlm-solve and rrlm-traces CLIs on your PATH"
+note "installing the rrlm-solve, rrlm-traces, and rrlm-doctor CLIs on your PATH"
 uv tool install --force .
 
-# Deno is needed only for the jspi (Pyodide) sandbox; warn, do not fail.
+# Deno is needed only for the opt-in jspi (Pyodide) sandbox; warn, do not fail.
 if ! command -v deno >/dev/null 2>&1; then
-  note "Deno is not installed. It is only needed for the 'jspi' sandbox backend."
+  note "Deno is not installed. It is only needed for the opt-in 'jspi' sandbox backend"
+  note "(the default 'supervisor' backend needs no Deno)."
   note "install it later with: curl -fsSL https://deno.land/install.sh | sh"
 fi
 
-note "done. Try:  rrlm-solve --help"
+note "done. Try:  rrlm-doctor   (checks your setup), then:  rrlm-solve --help"
 note "checkout lives at: $RRLM_HOME"

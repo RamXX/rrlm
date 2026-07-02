@@ -21,6 +21,20 @@ import pytest
 TESTS_DIR = Path(__file__).resolve().parent
 STUB_PATH = TESTS_DIR / "stub_server.py"
 
+# rrlm reads these from the environment (CLI + extension parity); a developer's
+# shell must never leak them into the suite, or tests stop being deterministic.
+_RRLM_ENV_VARS = (
+    "RRLM_MAIN", "RRLM_SUB", "RRLM_BACKEND", "RRLM_WEB", "RRLM_TIMEOUT",
+    "RRLM_MAX_COST", "RRLM_TRACE_DIR", "RRLM_SBX_NAME", "RRLM_RESPONSE_SCHEMA",
+    "RRLM_WEB_ALLOW_PRIVATE", "RRLM_RUNS_DIR", "RRLM_GEPA_DATASET",
+)
+
+
+@pytest.fixture(autouse=True)
+def _clean_rrlm_env(monkeypatch):
+    for var in _RRLM_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+
 # Slow-mode server-side delay. Comfortably larger than the timeouts the timeout
 # test uses, so the wall-clock ceiling fires before the stub would answer.
 STUB_SLOW_SECONDS = 2.0

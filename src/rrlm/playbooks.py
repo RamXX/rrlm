@@ -36,8 +36,10 @@ Failure discipline:
 """
 
 
-def doctrine_skill() -> Skill:
-    return Skill(name="rlm-first-doctrine", instructions=DOCTRINE)
+def doctrine_skill(text: str | None = None) -> Skill:
+    """The doctrine skill; ``text`` overrides the built-in doctrine (this is
+    the text component RLM-GEPA optimizes, see ``rrlm.gepa``)."""
+    return Skill(name="rlm-first-doctrine", instructions=text or DOCTRINE)
 
 
 WEB_DOCTRINE = """\

@@ -186,3 +186,189 @@ def test_build_rlm_sbx_backend_constructs(monkeypatch):
     # Constructing the agent with the sbx backend must not require Docker (no run).
     rlm = build_rlm(cfg, main, main)
     assert rlm is not None
+
+
+# --- native reasoning style (hosted first-party APIs) --- #
+def _native_model(**kw) -> ResolvedModel:
+    return ResolvedModel(
+        ref="anthropic/claude-x", provider="anthropic", model_id="claude-x",
+        litellm_id="anthropic/claude-x", api_key="sk-ant-test",
+        max_tokens=65_536, reasoning_style="native", supports_reasoning=True, **kw,
+    )
+
+
+def test_build_lm_native_off_sends_no_extra_fields():
+    """The default path for Anthropic/OpenAI/Gemini: reasoning=off must add
+    NOTHING to the request (these APIs reject unknown body fields)."""
+    lm = build_lm(_native_model(), 1024, 0.2, reasoning="off")
+    assert "extra_body" not in lm.kwargs
+    assert "reasoning_effort" not in lm.kwargs
+
+
+def test_build_lm_native_effort_maps_to_reasoning_effort():
+    lm = build_lm(_native_model(), 1024, 0.2, reasoning="medium")
+    assert lm.kwargs["reasoning_effort"] == "medium"
+    assert "extra_body" not in lm.kwargs  # never chat_template_kwargs for native
+
+
+def test_build_lm_native_default_sends_nothing():
+    lm = build_lm(_native_model(), 1024, 0.2, reasoning="default")
+    assert "extra_body" not in lm.kwargs
+    assert "reasoning_effort" not in lm.kwargs
+
+
+# --- RunBudget: the global per-run ceilings --- #
+def test_run_budget_sub_call_ceiling():
+    from rrlm.harness import BudgetExceededError, RunBudget
+
+    budget = RunBudget(max_sub_calls=2)
+    budget.take_sub_call()
+    budget.take_sub_call()
+    with pytest.raises(BudgetExceededError, match="sub-LM call budget"):
+        budget.take_sub_call()
+
+
+def test_run_budget_cost_ceiling_and_registration():
+    from rrlm.harness import BudgetExceededError, RunBudget
+
+    budget = RunBudget(max_cost_usd=0.01)
+    budget.check_cost()  # under the ceiling: fine
+    budget.register_cost(0.005)
+    budget.register_cost(None)  # unknown cost never counts
+    budget.check_cost()
+    budget.register_cost(0.006)
+    with pytest.raises(BudgetExceededError, match="cost budget"):
+        budget.check_cost()
+
+
+def test_run_budget_spawn_ceiling():
+    from rrlm.harness import RunBudget
+
+    budget = RunBudget(max_spawns=1)
+    assert budget.take_spawn() is True
+    assert budget.take_spawn() is False  # refusal, not an exception
+
+
+def test_run_budget_unlimited_by_default():
+    from rrlm.harness import RunBudget
+
+    budget = RunBudget()
+    for _ in range(100):
+        budget.take_sub_call()
+    assert budget.take_spawn() is True
+    budget.check_cost()
+
+
+def test_shared_lm_sub_budget_blocks_before_any_network():
+    """A sub-role LM over budget raises BEFORE the HTTP call (offline-provable)."""
+    from rrlm.harness import BudgetExceededError, RunBudget
+
+    lm = build_lm(_model(), 1024, 0.2)
+    lm.attach_budget(RunBudget(max_sub_calls=0), role="sub")
+    with pytest.raises(BudgetExceededError, match="sub-LM call budget"):
+        lm("hi")
+
+
+def test_shared_lm_cost_budget_blocks_main_too():
+    from rrlm.harness import BudgetExceededError, RunBudget
+
+    budget = RunBudget(max_cost_usd=0.01)
+    budget.register_cost(0.02)  # ceiling already crossed
+    lm = build_lm(_model(), 1024, 0.2)
+    lm.attach_budget(budget, role="main")
+    with pytest.raises(BudgetExceededError, match="cost budget"):
+        lm("hi")
+
+
+def test_response_cost_extraction_precedence():
+    import types
+
+    from rrlm.harness import _response_cost
+
+    hidden = types.SimpleNamespace(_hidden_params={"response_cost": 0.005}, usage=None)
+    assert _response_cost(hidden) == 0.005
+    inline = types.SimpleNamespace(_hidden_params={}, usage={"cost": 0.003})
+    assert _response_cost(inline) == 0.003
+    none = types.SimpleNamespace(_hidden_params={}, usage={"prompt_tokens": 5})
+    assert _response_cost(none) is None
+
+
+def test_rlm_spawn_refuses_over_spawn_budget():
+    import asyncio
+
+    from rrlm.harness import RunBudget, _make_rlm_spawn
+
+    cfg, main, sub = _lms()
+    stats = Counter()
+    spawn = _make_rlm_spawn(cfg, main, sub, 0, stats, budget=RunBudget(max_spawns=0))
+    out = asyncio.run(spawn("subtask", "slice"))
+    assert "rlm_spawn refused" in out
+    assert stats == Counter()  # nothing spawned, nothing counted
+
+
+# --- make_signature: typed answers and file inputs --- #
+def test_make_signature_default_is_shared_rlmtask():
+    from rrlm.harness import RlmTask, make_signature
+
+    assert make_signature() is RlmTask
+    assert make_signature(str) is RlmTask
+
+
+def test_make_signature_typed_answer():
+    from rrlm.harness import make_signature
+
+    sig = make_signature(int)
+    assert sig.model_fields["answer"].annotation is int
+    assert "files" not in sig.model_fields
+
+
+def test_make_signature_with_files():
+    from predict_rlm import File
+
+    from rrlm.harness import make_signature
+
+    sig = make_signature(with_files=True)
+    assert sig.model_fields["files"].annotation == list[File]
+    assert sig.model_fields["answer"].annotation is str
+    assert "files" in (sig.__doc__ or "") or "files" in sig.instructions
+
+
+def test_document_skills_for_matches_extensions():
+    from predict_rlm import Skill
+
+    from rrlm.harness import document_skills_for
+
+    skills = document_skills_for(["a.PDF", "b.xlsx", "c.txt", "d.csv"])
+    assert all(isinstance(s, Skill) for s in skills)
+    assert len(skills) == 2  # pdf + spreadsheet (csv and xlsx dedupe to one)
+    assert document_skills_for(["notes.txt", "code.py"]) == []
+
+
+# --- extra tools / doctrine passthrough --- #
+def test_build_rlm_extra_tools_registered():
+    async def lookup_ticket(ticket_id: str) -> str:
+        """Fetch one ticket by id."""
+        return ticket_id
+
+    cfg, main, sub = _lms()
+    rlm = build_rlm(cfg, main, sub, extra_tools=[lookup_ticket])
+    names = set(rlm.tools.keys()) if isinstance(rlm.tools, dict) else {
+        t.__name__ for t in rlm.tools
+    }
+    assert any("lookup_ticket" in n for n in names)
+
+
+def test_doctrine_skill_override():
+    from rrlm.playbooks import DOCTRINE, doctrine_skill
+
+    assert doctrine_skill().instructions == DOCTRINE
+    assert doctrine_skill("CUSTOM DOCTRINE").instructions == "CUSTOM DOCTRINE"
+
+
+def test_build_rlm_with_doctrine_and_extra_skills_constructs():
+    from predict_rlm import Skill
+
+    cfg, main, sub = _lms()
+    extra = Skill(name="domain-notes", instructions="Domain facts.")
+    rlm = build_rlm(cfg, main, sub, doctrine="Be terse.", extra_skills=[extra])
+    assert rlm is not None

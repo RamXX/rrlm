@@ -35,8 +35,8 @@ it at a cheaper non-thinking model to make the fan-out path inexpensive).
 
 ## Install into pi
 
-1. Install rrlm so `rrlm-solve` is on your PATH (and Deno is available for the
-   default jspi sandbox). rrlm is not on a package index; install from source:
+1. Install rrlm so `rrlm-solve` is on your PATH (Deno is needed only if you opt
+   into the jspi sandbox). rrlm is not on a package index; install from source:
 
    ```bash
    curl -fsSL https://raw.githubusercontent.com/RamXX/rrlm/main/install.sh | bash
@@ -56,14 +56,21 @@ it at a cheaper non-thinking model to make the fan-out path inexpensive).
    Or make it permanent by adding the extension path to `settings.json`
    `extensions` and the skill dir to `skills`.
 
-## Environment knobs read by the extension
+## Environment knobs
+
+`rrlm-solve` reads these itself, and the extension's child process inherits
+them, so setting them in Pi's environment is all it takes. The extension only
+passes `--main`/`--sub` explicitly (Pi's current model is not in the child env).
 
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `RRLM_MAIN` | Pi's current model | orchestrator model reference (`provider/model`) |
 | `RRLM_SUB` | same as `RRLM_MAIN` | leaf model reference for `predict()` fan-out |
-| `RRLM_BACKEND` | `jspi` | sandbox backend (`jspi`, `sbx`, or `supervisor`) |
+| `RRLM_BACKEND` | `supervisor` | sandbox backend (`supervisor`, `jspi`, or `sbx`) |
 | `RRLM_WEB` | unset | `1` to give the agent live web retrieval (`web_search`/`fetch`); needs the rrlm `web` extra |
+| `RRLM_TIMEOUT` | unset | hard wall-clock ceiling in seconds per `rlm_solve` call |
+| `RRLM_MAX_COST` | unset | soft USD ceiling per call (cost-reporting providers only) |
+| `RRLM_TRACE_DIR` | unset | capture RunTraces (+ index.jsonl) for RLM-GEPA |
 | `RRLM_DIR` | unset (use installed `rrlm-solve`) | project checkout to run via `uv run` |
 
 ## Verified

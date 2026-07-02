@@ -21,7 +21,7 @@ import traceback
 import dspy
 
 from rrlm.bench.tasks import TASK_BUILDERS, Task
-from rrlm.config import RUNS_DIR, HarnessConfig, load_env
+from rrlm.config import RUNS_DIR, HarnessConfig, load_env, resolve_backend
 from rrlm.harness import BaselineTask, build_lm, build_rlm
 from rrlm.metrics import RunLogger, harvest_lm_history, reconcile, summarize
 from rrlm.pi_config import ResolvedModel, resolve_model
@@ -149,7 +149,10 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-depth", type=int, default=2)
     parser.add_argument("--max-iterations", type=int, default=30)
-    parser.add_argument("--backend", default="jspi", choices=["jspi", "sbx", "supervisor"])
+    parser.add_argument(
+        "--backend", default=None, choices=["jspi", "sbx", "supervisor"],
+        help="execution sandbox; default: env RRLM_BACKEND, else supervisor",
+    )
     parser.add_argument(
         "--reasoning", default="default", choices=["default", "off", "low", "medium", "high"]
     )
@@ -188,7 +191,7 @@ def main() -> None:
         sub_model=sub.ref,
         max_depth=args.max_depth,
         max_iterations=args.max_iterations,
-        backend=args.backend,
+        backend=resolve_backend(args.backend),
         reasoning=args.reasoning,
         sandbox_exec_timeout=args.sandbox_exec_timeout
         if args.sandbox_exec_timeout

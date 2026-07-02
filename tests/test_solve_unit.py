@@ -106,3 +106,100 @@ def test_solve_skips_reconcile_for_local_gen_ids(monkeypatch):
     result = S.solve("task", "data")
     assert result["answer"] == "B"
     assert rec.cost_usd is None
+
+
+def test_solve_files_not_found_fails_before_model_resolution(tmp_path):
+    """A missing input file raises immediately, before any Pi/model lookup."""
+    import pytest
+
+    with pytest.raises(FileNotFoundError, match="nope.pdf"):
+        S.solve("read it", files=[tmp_path / "nope.pdf"])
+
+
+def test_asolve_many_rejects_empty_instructions():
+    import asyncio
+
+    import pytest
+
+    with pytest.raises(ValueError, match="non-empty"):
+        asyncio.run(S.asolve_many([], "data"))
+
+
+def test_json_default_handles_pydantic_and_fallback():
+    from pydantic import BaseModel
+
+    class Point(BaseModel):
+        x: int
+
+    assert S._json_default(Point(x=3)) == {"x": 3}
+    assert S._json_default(object()).startswith("<object")
+
+
+def test_env_float_parses_and_rejects(monkeypatch):
+    monkeypatch.setenv("RRLM_MAX_COST", "0.25")
+    assert S._env_float("RRLM_MAX_COST") == 0.25
+    monkeypatch.setenv("RRLM_MAX_COST", "not-a-number")
+    assert S._env_float("RRLM_MAX_COST") is None
+    monkeypatch.delenv("RRLM_MAX_COST")
+    assert S._env_float("RRLM_MAX_COST") is None
+
+
+# --- CLI argument routing (solve itself is stubbed; parsing is real) -------- #
+def _capture_solve_kwargs(monkeypatch, argv):
+    captured = {}
+
+    def fake_solve(*args, **kwargs):
+        captured["args"] = args
+        captured.update(kwargs)
+        return {"answer": "ok", "error": None}
+
+    monkeypatch.setattr(S, "solve", fake_solve)
+    monkeypatch.setattr("sys.argv", argv)
+    S.main()
+    return captured
+
+
+def test_cli_answer_type_json_maps_to_dict(monkeypatch):
+    captured = _capture_solve_kwargs(
+        monkeypatch, ["rrlm-solve", "-i", "q", "--answer-type", "json"]
+    )
+    assert captured["answer_type"] is dict
+
+
+def test_cli_answer_type_list_maps_to_list_of_str(monkeypatch):
+    captured = _capture_solve_kwargs(
+        monkeypatch, ["rrlm-solve", "-i", "q", "--answer-type", "list"]
+    )
+    assert captured["answer_type"] == list[str]
+
+
+def test_cli_max_cost_flag_and_env(monkeypatch):
+    captured = _capture_solve_kwargs(
+        monkeypatch, ["rrlm-solve", "-i", "q", "--max-cost", "0.10"]
+    )
+    assert captured["max_cost_usd"] == 0.10
+    monkeypatch.setenv("RRLM_MAX_COST", "0.05")
+    captured = _capture_solve_kwargs(monkeypatch, ["rrlm-solve", "-i", "q"])
+    assert captured["max_cost_usd"] == 0.05
+
+
+def test_cli_doctrine_file(monkeypatch, tmp_path):
+    doc = tmp_path / "winner.txt"
+    doc.write_text("Optimized doctrine text.", encoding="utf-8")
+    captured = _capture_solve_kwargs(
+        monkeypatch, ["rrlm-solve", "-i", "q", "--doctrine", str(doc)]
+    )
+    assert captured["doctrine"] == "Optimized doctrine text."
+
+
+def test_cli_routes_multiple_instructions_to_solve_many(monkeypatch):
+    captured = {}
+
+    def fake_many(instructions, data, **kwargs):
+        captured["instructions"] = instructions
+        return {"answer": ["a", "b"], "answers": ["a", "b"], "error": None}
+
+    monkeypatch.setattr(S, "solve_many", fake_many)
+    monkeypatch.setattr("sys.argv", ["rrlm-solve", "-i", "q1", "-i", "q2"])
+    S.main()
+    assert captured["instructions"] == ["q1", "q2"]

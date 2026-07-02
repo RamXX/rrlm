@@ -259,3 +259,46 @@ def test_pi_agent_dir_env_override(monkeypatch, tmp_path):
 
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(tmp_path / "custom-agent"))
     assert pi_agent_dir() == tmp_path / "custom-agent"
+
+
+def test_builtin_hosted_providers_get_native_reasoning(agent_dir: Path, monkeypatch):
+    """Anthropic/OpenAI/Gemini are strict APIs: they must get the 'native'
+    reasoning style (litellm reasoning_effort), never chat_template_kwargs,
+    which they reject with a 400."""
+    _write(agent_dir, models={"providers": {}})
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+    m = resolve_model("anthropic/claude-sonnet-4-5", pi_dir=agent_dir)
+    assert m.reasoning_style == "native"
+    assert m.supports_reasoning is True  # so solve() defaults reasoning to off
+    assert m.litellm_id == "anthropic/claude-sonnet-4-5"
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-x")
+    assert resolve_model("openai/gpt-5.1", pi_dir=agent_dir).reasoning_style == "native"
+    monkeypatch.setenv("GEMINI_API_KEY", "g-x")
+    assert resolve_model("google/gemini-3-pro", pi_dir=agent_dir).reasoning_style == "native"
+
+
+def test_builtin_with_base_override_keeps_chat_template(agent_dir: Path, monkeypatch):
+    """A baseUrl override re-routes the builtin through an OpenAI-compatible
+    server, where the chat-template toggle is the correct mechanism."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-x")
+    models = {
+        "providers": {
+            "openai": {
+                "baseUrl": "http://127.0.0.1:8080/v1",
+                "models": [{"id": "m"}],
+            }
+        }
+    }
+    _write(agent_dir, models=models)
+    m = resolve_model("openai/m", pi_dir=agent_dir)
+    assert m.reasoning_style == "chat_template"
+    assert m.litellm_id == "openai/m"
+    assert m.is_local is True
+
+
+def test_openrouter_style_unchanged_by_native_fix(agent_dir: Path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-x")
+    _write(agent_dir, models={"providers": {}})
+    m = resolve_model("openrouter/qwen/qwen3.6-27b", pi_dir=agent_dir)
+    assert m.reasoning_style == "openrouter"

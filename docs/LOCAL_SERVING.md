@@ -143,8 +143,8 @@ built-in; nothing here patches predict-rlm):
 | `jspi` | Deno/Pyodide WASM | local, $0, zero-setup (Deno present); slower cold-start |
 | `sbx` | real Linux container (Docker) | strongest; needs `predict-rlm[sbx]` + the `sbx` CLI (`brew install docker/tap/sbx`, `sbx login`); ~25s/call ephemeral overhead (use a persistent reused sandbox to amortize) |
 
-The `rrlm-solve` wrapper picks the backend from `RRLM_BACKEND` (default `supervisor`),
-overridable per call with `--backend`. For an isolated run:
+`rrlm-solve` itself (and the library) picks the backend from `--backend`, then
+`RRLM_BACKEND`, then the `supervisor` default. For an isolated run:
 
 ```bash
 RRLM_BACKEND=sbx rrlm-solve -i "..." -d @data.txt

@@ -45,3 +45,6 @@ scripts/local-serving/dflash-qwen36.sh
 dagger/sdk/
 dagger/.venv/
 .dagger/
+
+# predict-rlm supervisor backend runtime artifacts
+.predict_rlm_runner_env/
