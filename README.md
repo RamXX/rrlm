@@ -395,7 +395,12 @@ rrlm-solve --doctrine <winner.txt> ...     # deploy the winner
 ```
 
 See `src/rrlm/gepa.py` for the dataset format (checkers: `exact`, `contains`,
-`number`) and details.
+`number`) and details. To measure generalization instead of memorization, tag
+examples with a `domain` and hold whole domains out of optimization
+(`RRLM_GEPA_HOLDOUT_DOMAINS=code,web`; they never enter train or val), then
+score the winner on exactly those domains with `rrlm-gepa eval --doctrine
+<winner.txt>`. The protocol and the target evaluation matrix are in
+[docs/EVALS.md](docs/EVALS.md).
 
 ## Live web access (opt-in)
 
@@ -494,6 +499,8 @@ versioning rules.
 | [docs/DESIGN.md](docs/DESIGN.md) | Design choices and tradeoffs, expected behavior, ideal use cases, when rrlm is the wrong tool |
 | [docs/FINDINGS.md](docs/FINDINGS.md) | Benchmark methodology and results: RLM vs context-stuffing |
 | [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md) | The settled local model stack ($0, offline) and the bake-off that chose it |
+| [docs/EVALS.md](docs/EVALS.md) | The evaluation matrix and the GEPA domain-holdout generalization protocol |
+| [docs/CONTRACT_V2.md](docs/CONTRACT_V2.md) | Proposal: input polymorphism, resources, and artifacts for the next contract revision |
 | [docs/CI.md](docs/CI.md) | The portable Dagger CI gate, the GitHub Actions workflow, and why repeat runs are fast |
 | [pi/README.md](pi/README.md) | Wiring rrlm into Pi: the `rlm_solve` tool and the routing skill |
 | [examples/crm](examples/crm) | The code-generation showcase: a local 35B model builds a Go CRM |

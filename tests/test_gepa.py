@@ -175,3 +175,97 @@ def test_evaluate_example_feedback_on_wrong_answer(stub_model, tmp_path):
     )
     assert result.score == 0.0
     assert "expected exactly" in result.feedback
+
+
+# --- domains and the generalization holdout ----------------------------------
+
+
+def test_load_dataset_reads_domain_tags(tmp_path):
+    path = _write_dataset(tmp_path, [
+        {"instruction": "a?", "data": "x", "expected": "1", "domain": "tabular"},
+        {"instruction": "b?", "data": "y", "expected": "2"},
+    ])
+    examples = load_dataset(path)
+    assert examples[0].domain == "tabular"
+    assert examples[1].domain == ""
+
+
+def _ex(i, domain=""):
+    from rrlm.gepa import DatasetExample
+
+    return DatasetExample(
+        example_id=f"e{i}", instruction="q", data="d", expected="x", domain=domain
+    )
+
+
+def test_partition_domains_no_holdout_keeps_everything():
+    from rrlm.gepa import partition_domains
+
+    examples = [_ex(1, "a"), _ex(2, "b")]
+    in_domain, held_out = partition_domains(examples, [""])
+    assert in_domain == examples and held_out == []
+
+
+def test_partition_domains_splits_and_never_trains_on_holdout():
+    from rrlm.gepa import partition_domains
+
+    examples = [_ex(1, "tabular"), _ex(2, "code"), _ex(3, "tabular"), _ex(4, "docs")]
+    in_domain, held_out = partition_domains(examples, ["code", "docs"])
+    assert [e.domain for e in in_domain] == ["tabular", "tabular"]
+    assert sorted(e.domain for e in held_out) == ["code", "docs"]
+
+
+def test_partition_domains_rejects_unknown_domain():
+    from rrlm.gepa import partition_domains
+
+    with pytest.raises(ValueError, match="not present in the dataset.*ghost"):
+        partition_domains([_ex(1, "tabular")], ["ghost"])
+
+
+def test_partition_domains_rejects_holding_out_everything():
+    from rrlm.gepa import partition_domains
+
+    with pytest.raises(ValueError, match="nothing is left"):
+        partition_domains([_ex(1, "a"), _ex(2, "a")], ["a"])
+
+
+def test_build_project_excludes_holdout_from_both_splits(stub_model, tmp_path, monkeypatch):
+    model = stub_model("submit")
+    rows = [
+        {"instruction": f"q{i}", "data": "abc", "expected": "3",
+         "domain": "code" if i % 2 else "tabular"}
+        for i in range(8)
+    ]
+    path = _write_dataset(tmp_path, rows)
+    monkeypatch.setenv("RRLM_GEPA_HOLDOUT_DOMAINS", "code")
+    from rrlm.gepa import build_project
+
+    project = build_project(path, main_model=model)
+    trained = list(project.load_trainset()) + list(project.load_valset())
+    assert len(trained) == 4  # the 4 'tabular' rows
+    assert all(e.domain == "tabular" for e in trained)
+
+
+@pytest.mark.e2e
+def test_eval_reports_per_domain_scores(stub_model, tmp_path, monkeypatch, capsys):
+    """rrlm-gepa eval end to end: the stub answers len(data), so expected
+    values chosen to match score 1.0 and a mismatched one scores 0.0."""
+    from rrlm.gepa import eval_main
+
+    model = stub_model("submit")
+    data = "abcd"  # stub submits str(len(data)) = "4"
+    path = _write_dataset(tmp_path, [
+        {"instruction": "n?", "data": data, "expected": "4", "domain": "tabular"},
+        {"instruction": "n?", "data": data, "expected": "4", "domain": "code"},
+        {"instruction": "n?", "data": data, "expected": "999", "domain": "code"},
+    ])
+    rc = eval_main([
+        "--dataset", str(path), "--domains", "code", "--json",
+        "--main", model, "--backend", "supervisor", "--max-iterations", "5",
+    ])
+    assert rc == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["examples"] == 2  # only the held-out 'code' rows
+    assert set(report["domains"]) == {"code"}
+    assert report["domains"]["code"]["n"] == 2
+    assert report["domains"]["code"]["mean_score"] == 0.5  # one right, one wrong
