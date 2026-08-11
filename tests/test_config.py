@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 
 from rrlm.config import HarnessConfig, load_env, resolve_backend
@@ -55,3 +57,22 @@ def test_load_env_reads_cwd_dotenv(monkeypatch, tmp_path):
     import os
 
     assert os.environ.get("RRLM_CWD_PROBE") == "from-cwd"
+
+
+def test_resolve_backend_warns_on_implicit_supervisor_default(monkeypatch):
+    monkeypatch.delenv("RRLM_BACKEND", raising=False)
+    # Nobody chose the host-execution posture: that deserves one loud line.
+    with pytest.warns(UserWarning, match="directly on this host"):
+        assert resolve_backend(None) == "supervisor"
+
+
+def test_resolve_backend_explicit_choices_are_quiet(monkeypatch):
+    monkeypatch.delenv("RRLM_BACKEND", raising=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any warning fails the test
+        assert resolve_backend("supervisor") == "supervisor"
+        assert resolve_backend("jspi") == "jspi"
+    monkeypatch.setenv("RRLM_BACKEND", "supervisor")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert resolve_backend(None) == "supervisor"

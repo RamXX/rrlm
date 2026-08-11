@@ -69,7 +69,8 @@ def _check_credentials(lines: list[str]) -> None:
 
 def _check_backends(lines: list[str]) -> None:
     lines.append("backends")
-    lines.append(f"  {_OK} supervisor: host CPython (default; no extra runtime)")
+    lines.append(f"  {_OK} supervisor: host CPython (default; no extra runtime; "
+                 "executes model code on this host - trusted data only)")
     deno = shutil.which("deno")
     lines.append(f"  {_OK} jspi: deno at {deno}" if deno
                  else f"  {_NO} jspi: deno not on PATH (needed only for --backend jspi)")

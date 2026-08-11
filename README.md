@@ -198,6 +198,9 @@ predict-rlm). The budgets are **global to the run**: they are shared across the 
   (Deno/Pyodide WASM sandbox, local, $0), or `sbx` (Docker Linux container, strongest
   isolation; needs Docker and the `sbx` CLI; auto-reuses a warm container to keep
   per-call overhead low). Prefer `jspi` or `sbx` when the data or task is untrusted.
+  An *implicit* supervisor default (no flag, no env) warns once per process that
+  model-generated Python runs on the host; any explicit choice, including
+  `RRLM_BACKEND=supervisor`, is respected quietly.
   See [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
 
 ## Multi-turn sessions (a persistent REPL namespace)

@@ -7,6 +7,7 @@ config (see ``rrlm.pi_config``), so rrlm runs whatever models Pi provides.
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -43,11 +44,26 @@ def resolve_backend(arg: str | None) -> str:
     ``supervisor`` (host CPython) is the default because it needs no extra
     runtime (no Deno, no Docker) and is the fastest; pick ``jspi`` or ``sbx``
     when the data or task is untrusted and you want the code sandboxed.
+
+    Falling into that default silently is a security posture nobody chose, so
+    an *implicit* supervisor selection warns once: model-generated Python runs
+    directly on the host. Any explicit choice - the argument or the env var,
+    including explicitly choosing ``supervisor`` - is respected quietly.
     """
-    backend = (arg or os.environ.get("RRLM_BACKEND", "")).strip() or "supervisor"
+    explicit = (arg or os.environ.get("RRLM_BACKEND", "")).strip()
+    backend = explicit or "supervisor"
     if backend not in BACKENDS:
         raise ValueError(
             f"unknown backend {backend!r}: choose one of {', '.join(BACKENDS)}"
+        )
+    if not explicit:
+        warnings.warn(
+            "rrlm is defaulting to the 'supervisor' backend: model-generated "
+            "Python runs directly on this host. Fine for trusted data; use "
+            "--backend jspi or sbx to sandbox untrusted work, or set "
+            "RRLM_BACKEND=supervisor to make the choice explicit and silence "
+            "this warning.",
+            stacklevel=2,
         )
     return backend
 

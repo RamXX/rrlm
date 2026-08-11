@@ -100,11 +100,14 @@ def _response_cost(response) -> float | None:
 class SharedLM(dspy.LM):
     """LM whose no-argument copy() returns itself, with optional run budgets.
 
-    predict-rlm copies the lm/sub_lm instances it is given (predict_rlm.py:795),
-    so with a plain dspy.LM each recursion level accumulates history on a private
-    copy and per-run accounting harvests nothing. Identity-copy keeps every call
-    at every depth in one .history. copy() with overrides still returns a real
-    copy, so per-call config overrides keep their isolation semantics.
+    predict-rlm copies the lm/sub_lm instances it is given, so with a plain
+    dspy.LM each recursion level accumulates history on a private copy and
+    per-run accounting harvests nothing. Identity-copy keeps every call at
+    every depth in one .history. copy() with overrides still returns a real
+    copy, so per-call config overrides keep their isolation semantics. The
+    whole chain is pinned end-to-end by the budget integration tests
+    (test_guardrails), which fail loudly if predict-rlm stops copying or
+    stops honoring an injected LM.
 
     When a RunBudget is attached (see ``rrlm.solve``), every call first checks
     the global spend ceiling, sub-role calls also draw from the global sub-call
