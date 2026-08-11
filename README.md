@@ -200,6 +200,42 @@ predict-rlm). The budgets are **global to the run**: they are shared across the 
   per-call overhead low). Prefer `jspi` or `sbx` when the data or task is untrusted.
   See [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
 
+## Engine plugins (route a run to another solver)
+
+The built-in predict-rlm harness is one way to fill the solve contract
+(instruction + data + budgets -> typed answer + usage). An *engine plugin* is
+another solver behind the same contract: a sealed interpreter, an audited
+symbolic engine, anything. rrlm documents only the protocol; engine packages
+register themselves at install time and never appear in rrlm's tree or docs.
+
+```bash
+rrlm-solve --engine <name> -i "..." -d @file    # or env RRLM_ENGINE
+```
+
+```python
+result = solve("...", data=text, engine="<name>")   # library form
+```
+
+Selection is always **explicit** (an argument or `RRLM_ENGINE`); nothing routes
+by inference, because choosing between trust levels is the caller's policy
+decision. With an engine, model/backend/doctrine parameters are ignored (the
+engine owns its execution); `--timeout` stays enforced host-side, and the
+call/cost ceilings pass down as the engine's budget lease. Engine runs land in
+the same `RRLM_TRACE_DIR` `index.jsonl` history with an `engine` field.
+
+Writing an engine: implement the small protocol in
+[`src/rrlm/engines.py`](src/rrlm/engines.py) (an async `solve()` returning an
+`EngineResult`; failures go in `result.error`, never exceptions), expose it
+through the `rrlm.engines` entry-point group, and validate it from your own
+test suite with `rrlm.conformance.check_engine_sync`. The in-tree `reference`
+engine (deterministic, offline, model-free) is the protocol demo the docs,
+tests, and `rrlm-doctor` use:
+
+```bash
+rrlm-solve --engine reference -i count-lines -d @big.log     # protocol smoke test
+rrlm-doctor                                                  # lists installed engines
+```
+
 ## Optimize the doctrine with RLM-GEPA (opt-in)
 
 The doctrine is a text component, so it is optimizable. `rrlm-gepa` (the `gepa`

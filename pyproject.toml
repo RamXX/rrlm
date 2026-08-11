@@ -44,6 +44,12 @@ Homepage = "https://github.com/RamXX/rrlm"
 Repository = "https://github.com/RamXX/rrlm"
 Issues = "https://github.com/RamXX/rrlm/issues"
 
+# The built-in reference engine registers through the same entry-point group
+# third-party engine packages use (see rrlm.engines), so discovery is exercised
+# by rrlm's own install rather than only by external plugins.
+[project.entry-points."rrlm.engines"]
+reference = "rrlm.engines:ReferenceEngine"
+
 [project.scripts]
 rrlm-solve = "rrlm.solve:main"
 rrlm-bench = "rrlm.bench.runner:main"

@@ -96,6 +96,30 @@ def _check_extras(lines: list[str]) -> None:
         lines.append(f"  {_NO} gepa: install with `uv sync --extra gepa` to enable rrlm-gepa")
 
 
+def _check_engines(lines: list[str]) -> None:
+    """List every resolvable engine plugin with its self-described capabilities.
+
+    Engines are listed by name only - whatever an installed package registered
+    under ``rrlm.engines`` - so this report never enumerates what engines
+    exist beyond this machine. A plugin whose import fails is reported broken
+    rather than hidden or fatal: doctor is exactly where that must surface.
+    """
+    from rrlm.engines import available_engines
+
+    lines.append("engines")
+    for name, factory in sorted(available_engines().items()):
+        try:
+            eng = factory()
+            caps = eng.capabilities
+            flags = ", ".join(
+                flag for flag, on in (("sealed", caps.sealed), ("audited", caps.audited)) if on
+            )
+            detail = caps.description + (f" [{flags}]" if flags else "")
+            lines.append(f"  {_OK} {name}: {detail}")
+        except Exception as exc:  # noqa: BLE001, a broken plugin must not kill the report
+            lines.append(f"  {_NO} {name}: failed to load ({type(exc).__name__}: {exc})")
+
+
 def _check_local_servers(lines: list[str]) -> None:
     """Ping every locally-hosted provider's /models endpoint (fast timeout)."""
     import httpx
@@ -127,6 +151,7 @@ def report() -> str:
     resolvable = _check_pi(lines)
     _check_credentials(lines)
     _check_backends(lines)
+    _check_engines(lines)
     _check_extras(lines)
     _check_local_servers(lines)
     if resolvable:

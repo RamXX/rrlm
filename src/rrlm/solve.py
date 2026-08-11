@@ -61,6 +61,7 @@ async def asolve(
     reasoning: str | None = None,
     temperature: float | None = None,
     backend: str | None = None,
+    engine: str | None = None,
     max_depth: int = 2,
     max_iterations: int = 30,
     max_llm_calls: int = 50,
@@ -110,15 +111,31 @@ async def asolve(
     ``web=True`` gives the agent host-side ``web_search`` / ``fetch`` tools plus a
     doctrine to retrieve-and-verify instead of answering from memory (needs the
     optional ``web`` extra: ddgs + trafilatura). It works on every backend.
+
+    ``engine`` routes the run to an installed engine plugin instead of the
+    built-in predict-rlm harness (see :mod:`rrlm.engines`). Selection is always
+    explicit - this argument, ``--engine``, or ``RRLM_ENGINE``; nothing routes
+    by inference. With an engine, the model/backend/doctrine parameters are
+    ignored (the engine owns its own models and execution), while ``timeout_s``
+    stays enforced host-side and the call/cost ceilings are passed down as the
+    engine's budget lease.
     """
     # Validate the cheap, local things first: files and backend fail fast,
     # before any model resolution or key loading.
-    file_objs = None
-    extra_skills = list(skills or [])
     if files:
         missing = [str(p) for p in files if not Path(p).is_file()]
         if missing:
             raise FileNotFoundError(f"input file(s) not found: {', '.join(missing)}")
+
+    if engine:
+        return await _solve_with_engine(
+            engine, instruction, data, files=files, answer_type=answer_type,
+            timeout_s=timeout_s, max_llm_calls=max_llm_calls, max_cost_usd=max_cost_usd,
+        )
+
+    file_objs = None
+    extra_skills = list(skills or [])
+    if files:
         from predict_rlm import File
 
         file_objs = [File(path=str(p)) for p in files]
@@ -255,6 +272,88 @@ def solve(instruction: str, data: str = "", **kwargs) -> dict:
     return asyncio.run(asolve(instruction, data, **kwargs))
 
 
+async def _solve_with_engine(
+    name: str,
+    instruction: str,
+    data: str,
+    *,
+    files: list[str | Path] | None,
+    answer_type: type | None,
+    timeout_s: float | None,
+    max_llm_calls: int,
+    max_cost_usd: float | None,
+) -> dict:
+    """Run one solve through an engine plugin; return the standard result dict.
+
+    The result has the same shape as the native path (answer, error,
+    wall_clock_s, trace_file, spawn_stats, usage, config) so callers and the
+    CLI need not care which path ran; ``config`` carries the engine name and
+    ``vendor`` appears only when the engine returned engine-specific artifacts.
+    The wall-clock ceiling is enforced here with the same cancel-the-run
+    semantics as the native path, so it binds even a misbehaving engine.
+    """
+    from rrlm.engines import BudgetLease, EngineRequest, get_engine
+
+    eng = get_engine(name)
+    trace_dir = os.environ.get("RRLM_TRACE_DIR")
+    request = EngineRequest(
+        instruction=instruction,
+        data=data,
+        files=tuple(str(p) for p in files or ()),
+        answer_type=answer_type,
+        budget=BudgetLease(
+            timeout_s=timeout_s, max_llm_calls=max_llm_calls, max_cost_usd=max_cost_usd
+        ),
+        trace_dir=trace_dir,
+    )
+    answer, error, engine_result = "", None, None
+    t0 = time.monotonic()
+    try:
+        coro = eng.solve(request)
+        if timeout_s and timeout_s > 0:
+            engine_result = await asyncio.wait_for(coro, timeout=timeout_s)
+        else:
+            engine_result = await coro
+        answer, error = engine_result.answer, engine_result.error
+    except (asyncio.TimeoutError, TimeoutError):
+        error = f"TimeoutError: run exceeded timeout_s={timeout_s}s"
+    except Exception as exc:  # noqa: BLE001, return the failure to the caller
+        error = f"{type(exc).__name__}: {exc}"
+    wall_clock_s = time.monotonic() - t0
+
+    trace_file = engine_result.trace_file if engine_result else None
+    if trace_dir:
+        # Engine runs land in the same index.jsonl the native path feeds, so
+        # `rrlm-traces list` shows one unified history; the `engine` key is
+        # what distinguishes them (a free string - no engine enum anywhere).
+        _append_index(
+            trace_dir,
+            {
+                "trace_file": os.path.basename(trace_file) if trace_file else None,
+                "instruction": (instruction or "")[:500],
+                "answer": (answer if isinstance(answer, str) else repr(answer))[:500],
+                "error": error,
+                "data_chars": len(data or ""),
+                "wall_clock_s": round(wall_clock_s, 2),
+                "config": {"engine": name},
+                "engine": name,
+            },
+        )
+
+    result = {
+        "answer": answer,
+        "error": error,
+        "wall_clock_s": round(wall_clock_s, 2),
+        "trace_file": trace_file,
+        "spawn_stats": {},
+        "usage": dict(engine_result.usage) if engine_result else {},
+        "config": {"engine": name},
+    }
+    if engine_result and engine_result.vendor:
+        result["vendor"] = engine_result.vendor
+    return result
+
+
 def _many_task(instructions: list[str]) -> str:
     numbered = "\n".join(f"{i}. {q}" for i, q in enumerate(instructions, 1))
     return (
@@ -316,21 +415,36 @@ def export_trace(
         path = os.path.join(trace_dir, f"trace-{stamp}.json")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(trace.to_exportable_json())
-        index = os.path.join(trace_dir, "index.jsonl")
-        rec = {
-            "trace_file": os.path.basename(path),
-            "instruction": (instruction or "")[:500],
-            "answer": (answer or "")[:500],
-            "error": error,
-            "data_chars": data_chars,
-            "wall_clock_s": wall_clock_s,
-            "config": config or {},
-        }
-        with open(index, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(rec, default=str) + "\n")
+        _append_index(
+            trace_dir,
+            {
+                "trace_file": os.path.basename(path),
+                "instruction": (instruction or "")[:500],
+                "answer": (answer or "")[:500],
+                "error": error,
+                "data_chars": data_chars,
+                "wall_clock_s": wall_clock_s,
+                "config": config or {},
+            },
+        )
         return path
     except Exception:  # noqa: BLE001, trace capture is best-effort, never fatal
         return None
+
+
+def _append_index(trace_dir: str, record: dict) -> None:
+    """Best-effort append of one record to ``trace_dir``/index.jsonl.
+
+    Shared by the native and engine solve paths so both feed one history;
+    never raises, index upkeep must not break a solve that already succeeded.
+    """
+    try:
+        os.makedirs(trace_dir, exist_ok=True)
+        index = os.path.join(trace_dir, "index.jsonl")
+        with open(index, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, default=str) + "\n")
+    except Exception:  # noqa: BLE001, best-effort by contract
+        pass
 
 
 def _read_data(arg: str | None) -> str:
@@ -403,6 +517,12 @@ def main() -> None:
              "(host CPython, fastest; use jspi/sbx to isolate untrusted work)",
     )
     parser.add_argument(
+        "--engine", default=os.environ.get("RRLM_ENGINE") or None, metavar="NAME",
+        help="route the run to an installed engine plugin instead of the built-in "
+             "harness (env RRLM_ENGINE); see rrlm.engines. Model/backend/doctrine "
+             "flags are ignored with an engine; budget flags still apply.",
+    )
+    parser.add_argument(
         "--answer-type", default=None, choices=sorted(ANSWER_TYPES),
         help="type the final answer is parsed into (single-question runs); "
              "'json' = a JSON object, 'list' = a list of strings",
@@ -448,6 +568,7 @@ def main() -> None:
         reasoning=args.reasoning,
         temperature=args.temperature,
         backend=args.backend,
+        engine=args.engine,
         max_depth=args.max_depth,
         max_iterations=args.max_iterations,
         max_llm_calls=args.max_llm_calls,
