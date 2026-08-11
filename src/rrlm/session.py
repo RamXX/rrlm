@@ -166,11 +166,17 @@ class Session:
         self._interpreter.reset()
 
     def close(self) -> None:
-        """Release the interpreter (terminates the runner process). Idempotent."""
+        """Release the interpreter (terminates the runner process). Idempotent.
+
+        Bounded: a stuck polite shutdown falls back to killing the runner
+        (see :func:`rrlm.harness.shutdown_interpreter`).
+        """
         if self._closed:
             return
         self._closed = True
-        self._interpreter.shutdown()
+        from rrlm.harness import shutdown_interpreter
+
+        shutdown_interpreter(self._interpreter)
 
     async def aclose(self) -> None:
         """Async :meth:`close` (shutdown blocks briefly on process exit)."""

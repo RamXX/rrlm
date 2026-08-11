@@ -323,6 +323,40 @@ def build_lm(
     )
 
 
+def shutdown_interpreter(interpreter, timeout_s: float = 10.0) -> None:
+    """Bounded release of a supervisor interpreter: ask politely, then kill.
+
+    ``PythonSupervisor.shutdown()`` sends a protocol request and blocks reading
+    the reply; a runner/kernel pipe race can leave that read stuck for the full
+    protocol timeout (observed on Linux CI: 19 silent minutes - the read
+    timeout is the per-turn exec timeout, 3600s for local-model configs). The
+    namespace is disposable at release time by definition, so give the polite
+    path ``timeout_s`` and then kill the runner process; the closed pipe also
+    unblocks the abandoned reader thread via EOF.
+    """
+    done = threading.Event()
+
+    def polite() -> None:
+        try:
+            interpreter.shutdown()
+        except Exception:  # noqa: BLE001, release is best-effort by contract
+            pass
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=polite, name="rrlm-interpreter-shutdown", daemon=True)
+    thread.start()
+    if done.wait(timeout_s):
+        return
+    process = getattr(interpreter, "_process", None)
+    if process is not None:
+        try:
+            process.kill()
+        except Exception:  # noqa: BLE001, already-dead processes are fine
+            pass
+    done.wait(timeout_s)
+
+
 def _set_sandbox_exec_timeout(seconds: float) -> None:
     """Raise the JSPI backend per-turn exec timeout (default 300s).
 
@@ -504,7 +538,7 @@ def _make_rlm_spawn(
             # child runs must not read or pollute a persistent namespace), so
             # release the child's runner process here or it outlives the spawn.
             if child.rrlm_owned_interpreter is not None:
-                await asyncio.to_thread(child.rrlm_owned_interpreter.shutdown)
+                await asyncio.to_thread(shutdown_interpreter, child.rrlm_owned_interpreter)
             if emitter is not None:
                 emitter.emit("spawn_finished", depth=child_depth)
         return prediction.answer

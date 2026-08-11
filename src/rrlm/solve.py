@@ -38,7 +38,14 @@ from pathlib import Path
 
 from rrlm.config import BACKENDS, HarnessConfig, load_env, resolve_backend
 from rrlm.events import EventEmitter
-from rrlm.harness import RunBudget, build_lm, build_rlm, document_skills_for, make_signature
+from rrlm.harness import (
+    RunBudget,
+    build_lm,
+    build_rlm,
+    document_skills_for,
+    make_signature,
+    shutdown_interpreter,
+)
 from rrlm.metrics import harvest_lm_history, reconcile, summarize
 from rrlm.pi_config import resolve_model
 
@@ -297,7 +304,7 @@ async def asolve(
         # host process exits. Session-injected interpreters stay alive by design.
         owned = getattr(rlm, "rrlm_owned_interpreter", None)
         if owned is not None:
-            await asyncio.to_thread(owned.shutdown)
+            await asyncio.to_thread(shutdown_interpreter, owned)
     wall_clock_s = time.monotonic() - t0
     if emitter:
         emitter.emit("run_finished", error=error, wall_clock_s=round(wall_clock_s, 2))

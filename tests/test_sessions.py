@@ -171,3 +171,59 @@ def test_spawned_children_release_their_interpreters(stub_model, created_backend
     # Parent + one child, each with its own interpreter, both released.
     assert len(created_backends) == 2
     assert all(backend._shutdown for backend in created_backends)
+
+
+def test_shutdown_interpreter_kills_a_stuck_polite_path():
+    """A shutdown() blocked on a protocol read must not hang the release.
+
+    Reproduces the CI hang shape: shutdown() blocks until the runner process
+    dies (here: an Event released by kill()). The bounded release must return
+    promptly and must have escalated to killing the process.
+    """
+    import threading
+    import time
+
+    from rrlm.harness import shutdown_interpreter
+
+    released = threading.Event()
+    killed = threading.Event()
+
+    class StuckProcess:
+        def kill(self):
+            killed.set()
+            released.set()  # killing the runner closes the pipe -> read unblocks
+
+        def poll(self):
+            return None
+
+    class StuckInterpreter:
+        _process = StuckProcess()
+
+        def shutdown(self):
+            released.wait(30)  # blocked "readline": only process death frees it
+
+    t0 = time.monotonic()
+    shutdown_interpreter(StuckInterpreter(), timeout_s=0.5)
+    assert killed.is_set()
+    assert time.monotonic() - t0 < 5
+
+
+def test_shutdown_interpreter_polite_path_never_kills():
+    from rrlm.harness import shutdown_interpreter
+
+    killed = []
+
+    class CleanProcess:
+        def kill(self):
+            killed.append(True)
+
+    class CleanInterpreter:
+        _process = CleanProcess()
+        was_shutdown = False
+
+        def shutdown(self):
+            self.was_shutdown = True
+
+    interp = CleanInterpreter()
+    shutdown_interpreter(interp, timeout_s=5.0)
+    assert interp.was_shutdown and not killed
