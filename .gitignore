@@ -9,6 +9,7 @@ htmlcov/
 *.egg-info/
 runs/
 logs/
+scripts/local-serving/.artifacts/
 dist/
 data/
 
