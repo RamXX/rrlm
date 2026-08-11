@@ -47,14 +47,38 @@ Never pre-summarize or truncate it, defeating the purpose. Make the
   enabled, delegate factual or current-events questions you cannot answer with
   certainty (or that need a cited source URL) to it, even with no data, it will
   search the live web, fetch the source, and verify.
-- **You need to keep reasoning over the data afterward**, `rlm_solve` returns
-  an answer, not the loaded data. If you need iterative back-and-forth over the
-  same large payload, call it once with a precise instruction.
+- **You need the raw data in YOUR context afterward**, `rlm_solve` returns an
+  answer, not the loaded data. But if what you need is *follow-up questions
+  over the same data*, use session mode (below) instead of re-sending the
+  payload each time.
+
+## Follow-up questions: session mode
+
+When you expect more than one question over the same data, set
+`session: true` on every related call. The harness then keeps ONE persistent
+REPL across your calls: variables, parsed structures, and helpers from one
+call are available to the next, so the data loads once and later questions
+are fast and cheap.
+
+Work the session like this:
+
+1. First call: pass the data and tell the harness what to KEEP, by name,
+   e.g. "Parse the ledger into `entries`; report the row count."
+2. Later calls: omit the data; reference the names, e.g. "Using `entries`,
+   total the amounts per vendor."
+3. Start a genuinely new topic on the same session with
+   `reset_session: true` (clears the persisted state first).
+
+What persists is computed state, not your conversation: each call is still
+its own run with fresh budgets, and only the variables you asked to keep
+carry over. Switching Pi to a different model restarts the session (state is
+lost), so finish a session's work before changing models.
 
 ## Routing rule (one line)
 
 If the answer requires touching a lot of data, or being exact over many items,
-or judging many items semantically -> `rlm_solve`. Otherwise, do it yourself.
+or judging many items semantically -> `rlm_solve`; if more questions on the
+same data will follow -> add `session: true`. Otherwise, do it yourself.
 
 ## Example calls
 
@@ -63,3 +87,8 @@ or judging many items semantically -> `rlm_solve`. Otherwise, do it yourself.
 - `rlm_solve(instruction="Total amount of status=ok transactions for user u573,
   rounded to 2 decimals.", data_path="/abs/ledger.txt")`
 - `rlm_solve(instruction="Name the one function with a bug.", data=<module source>)`
+- Session over one payload:
+  `rlm_solve(instruction="Parse the ledger into `entries`; report the row count.",
+  data_path="/abs/ledger.txt", session=true)` then
+  `rlm_solve(instruction="Using `entries`, total the amounts per vendor.",
+  session=true)`

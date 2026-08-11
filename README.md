@@ -280,7 +280,12 @@ What persists is the **interpreter namespace**, not conversation history: each
 call is still its own agent run with fresh budgets and its own trace, so
 instructions should name the variables earlier calls created. `reset()`
 clears the namespace without ending the session; `close()` (or the context
-manager) releases the interpreter process. Sessions run on the `supervisor`
+manager) releases the interpreter process. Long-lived hosts that cannot link
+Python get the same capability over a line-delimited protocol via the
+`rrlm-session` CLI (one persistent Session on stdin/stdout; see
+`src/rrlm/session_server.py`), which is how the [Pi
+extension](pi/README.md) holds a session across a conversation
+(`rlm_solve(..., session: true)`). Sessions run on the `supervisor`
 backend (trusted data) only; changing the tool set between calls (e.g.
 toggling `web=`) starts a fresh namespace by design. For warm `sbx`
 containers across one-shot runs (filesystem persistence, not namespace

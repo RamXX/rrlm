@@ -10,13 +10,31 @@ context.
 ## Pieces
 
 - `extensions/rlm-backend/index.ts` registers the `rlm_solve` tool. It stages
-  the data to a temp file and shells out to `rrlm-solve --json`, returning the
-  verified answer plus usage metrics. By default it orchestrates with the **same
-  model Pi is currently using** (read from the tool's execution context) and
-  resolves endpoints/credentials from your Pi config.
+  the data to a temp file and, per call, either shells out to `rrlm-solve
+  --json` (one-shot, the default) or routes the call into a **persistent
+  session** (`session: true`): one long-lived `rrlm-session` subprocess whose
+  REPL namespace survives across calls, so variables and parsed data from one
+  delegation are available to the next. Pi carries the conversation; the
+  session carries the computed state. By default the harness orchestrates with
+  the **same model Pi is currently using** (read from the tool's execution
+  context) and resolves endpoints/credentials from your Pi config; switching
+  Pi's model restarts the session with a fresh namespace.
 - `skills/rlm-first/SKILL.md` teaches the agent *when* to delegate: large
   data, exact aggregation/search over many items, or per-item semantic judgment
-  at scale; and when not to (small data it can just read).
+  at scale; when to hold a session (`session: true` for follow-up questions
+  over the same data, naming the variables to keep); and when not to delegate
+  at all (small data it can just read).
+
+## The session bridge
+
+`rrlm-session` (also `python -m rrlm.session_server`) serves one persistent
+[`Session`](../README.md#multi-turn-sessions-a-persistent-repl-namespace)
+over line-delimited JSON on stdin/stdout - the protocol the extension speaks,
+usable by any long-lived host. One request per line
+(`{"id": 1, "op": "solve", "instruction": "...", "data_file": "/path"}`;
+also `reset`, `ping`, `close`), one response per line. stdin EOF closes the
+session and releases the interpreter, so if the host dies nothing lingers.
+See `src/rrlm/session_server.py` for the full protocol.
 
 ## The backend entry point
 
@@ -60,9 +78,10 @@ it at a cheaper non-thinking model to make the fan-out path inexpensive).
 
 ## Environment knobs
 
-`rrlm-solve` reads these itself, and the extension's child process inherits
-them, so setting them in Pi's environment is all it takes. The extension only
-passes `--main`/`--sub` explicitly (Pi's current model is not in the child env).
+`rrlm-solve` and `rrlm-session` read these themselves, and the extension's
+child processes inherit them, so setting them in Pi's environment is all it
+takes. The extension only passes `--main`/`--sub` explicitly (Pi's current
+model is not in the child env).
 
 | Var | Default | Meaning |
 |-----|---------|---------|

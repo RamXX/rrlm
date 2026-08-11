@@ -53,9 +53,9 @@ Two consequences follow, and both are measured rather than asserted (see
   history: nothing re-reads a transcript. The conversation layer is
   deliberately someone else's job, and the shipped composition provides it:
   behind [Pi](../pi/README.md), the agent carries the dialogue and delegates
-  data work to `rlm_solve` (today each delegation is an independent one-shot;
-  the extension does not yet hold a `Session` open across a conversation).
-  Library users get multi-turn *computation* through `Session`, which
+  data work to `rlm_solve`, holding one persistent session across the
+  conversation when it passes `session: true` (backed by the `rrlm-session`
+  bridge). Library users get multi-turn *computation* through `Session`, which
   persists the REPL namespace (variables, parsed data, helpers) between
   calls, with instructions naming what earlier calls created. What rrlm alone
   cannot give you is dialogue memory.
