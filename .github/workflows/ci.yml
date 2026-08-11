@@ -1,0 +1,31 @@
+# This workflow runs the same gate contract as `make ci` (see docs/CI.md):
+# ruff over src/tests/examples, then the fully offline coverage-gated suite
+# (unit + integration + e2e against the local stub servers; no network calls,
+# no credentials, no GPU). It invokes the make targets directly - the same
+# commands the Dagger module mirrors - rather than `dagger call ci`, because
+# a fresh runner has a cold Dagger cache volume and re-downloads the entire
+# dependency tree inside the engine on every run; setup-uv's wheel cache keeps
+# the native path to a few minutes with no contract drift (both paths run the
+# make-documented commands).
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync the locked environment
+        run: uv sync --frozen
+      - name: Lint
+        run: make lint
+      - name: Offline suite with coverage gate
+        run: make cov

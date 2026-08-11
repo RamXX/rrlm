@@ -80,6 +80,10 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+# Hang tripwire: dump every thread's traceback and fail a test stuck >300s
+# (normal tests finish in well under 10s; one CI run hung silently for 19
+# minutes before this). Turns a silent job timeout into a diagnosable failure.
+faulthandler_timeout = 300.0
 markers = [
     "real: calls a live model or external tooling (Pi, real provider). Needs credentials / a served model / a GPU; excluded from the default and coverage runs.",
     "integration: offline end-to-end run of the harness against the local OpenAI-compatible stub server (real subprocess, real sockets, no mocks, no network). Runs in the default and coverage runs.",

@@ -1,10 +1,16 @@
 # CI
 
-rrlm's CI is a [Dagger](https://dagger.io) module, not a provider-specific
-workflow. The pipeline lives in the repo (`dagger.json` plus `dagger/`) and runs
-the same offline test suite a developer runs locally. Moving off GitHub Actions,
-the goal is one portable gate that any provider (or any laptop) runs with a
+rrlm's canonical CI gate is a [Dagger](https://dagger.io) module. The pipeline
+lives in the repo (`dagger.json` plus `dagger/`) and runs the same offline test
+suite a developer runs locally; any provider (or any laptop) runs it with a
 single command: `dagger call ci`.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the same gate *contract*
+natively - `uv sync --frozen`, `make lint`, `make cov` - instead of invoking
+Dagger, because a fresh runner's cold Dagger cache re-downloads the entire
+dependency tree inside the engine on every run, while setup-uv's wheel cache
+keeps the native path to a few minutes. Both paths execute the make-documented
+commands below, so they cannot drift in what they check.
 
 ## What it runs
 
