@@ -28,6 +28,29 @@ integration and e2e tests start a local OpenAI-compatible stub server as a
 subprocess (no network, no API keys, no GPU). The project is installed via
 `uv sync` so the e2e tests can invoke the `rrlm-solve` console script.
 
+## Why repeat runs are fast (and first runs are not)
+
+The container environment is built in two layers. The dependency layer sees
+only `pyproject.toml`, `uv.lock`, and `.python-version` and runs
+`uv sync --frozen --no-install-project`; Dagger content-caches it, so editing
+source or tests never re-resolves or re-downloads dependencies - only a
+lockfile change does. The project layer then mounts the full source and
+finishes the sync (installing rrlm itself, which is cheap). Underneath both,
+the uv cache volume means even a lockfile change re-downloads only genuinely
+new wheels.
+
+Two operational consequences:
+
+* **Keep the engine warm.** The layer cache and the uv cache volume live in
+  the Dagger engine container (`docker ps` shows `dagger-engine-*`). The
+  first call after a fresh engine pays the full download once; every later
+  call reuses it. Do not `docker rm` the engine between runs.
+* **Ephemeral runners always pay the cold cost**, which is why the GitHub
+  Actions workflow runs the make contract natively with setup-uv's wheel
+  cache instead of `dagger call ci`. If a Dagger-run CI is ever wanted on
+  ephemeral runners, wire up a persistent remote cache (Dagger Cloud or a
+  self-hosted engine) rather than accepting the per-run download.
+
 ## Prerequisites
 
 - A container runtime. Docker works; Dagger uses it to run its engine.

@@ -51,13 +51,19 @@ class Rrlm:
     def _env(self) -> dagger.Container:
         """uv-enabled Python 3.13 container with the project synced.
 
-        `uv sync` installs the dependency groups and the project itself, so the
-        e2e tests can invoke the `rrlm-solve` console script as a subprocess.
-        The uv cache lives on a Dagger cache volume so repeat runs skip the
-        download work; only a cold cache touches the network.
+        Built in two layers so the expensive work is keyed to the right
+        inputs. The *dependency layer* sees only the resolution inputs
+        (pyproject.toml, uv.lock, .python-version) and runs
+        `uv sync --frozen --no-install-project`; Dagger content-caches it, so
+        editing source or tests never re-resolves or re-downloads anything -
+        only a lockfile change does. The *project layer* then mounts the full
+        source and finishes `uv sync --frozen`, which just installs rrlm
+        itself (cheap) so the e2e tests can invoke the `rrlm-solve` console
+        script. The uv cache volume underneath makes even a lockfile change
+        re-download only genuinely new wheels.
         """
         uv_cache = dag.cache_volume("rrlm-uv-cache")
-        return (
+        deps = (
             dag.container()
             .from_(UV_IMAGE)
             .with_env_variable("UV_CACHE_DIR", "/root/.cache/uv")
@@ -65,6 +71,13 @@ class Rrlm:
             # Copy out of the cache mount instead of hardlinking across it.
             .with_env_variable("UV_LINK_MODE", "copy")
             .with_workdir("/src")
+            .with_file("/src/pyproject.toml", self.source.file("pyproject.toml"))
+            .with_file("/src/uv.lock", self.source.file("uv.lock"))
+            .with_file("/src/.python-version", self.source.file(".python-version"))
+            .with_exec(["uv", "sync", "--frozen", "--no-install-project"])
+        )
+        return (
+            deps
             .with_directory("/src", self.source)
             .with_exec(["uv", "sync", "--frozen"])
         )
