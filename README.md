@@ -311,8 +311,13 @@ Selection is always **explicit** (an argument or `RRLM_ENGINE`); nothing routes
 by inference, because choosing between trust levels is the caller's policy
 decision. With an engine, model/backend/doctrine parameters are ignored (the
 engine owns its execution); `--timeout` stays enforced host-side, and the
-call/cost ceilings pass down as the engine's budget lease. Engine runs land in
-the same `RRLM_TRACE_DIR` `index.jsonl` history with an `engine` field.
+call/cost ceilings pass down as the engine's budget lease. Engine-specific
+knobs pass through opaquely with `engine_options={...}` (CLI:
+`--engine-option key=value`, repeatable, JSON values recognized); rrlm never
+inspects them. Engine runs land in the same `RRLM_TRACE_DIR` `index.jsonl`
+history with an `engine` field. The contract is versioned (`rrlm.engine/1`):
+an engine may declare the protocol it was built against and the conformance
+suite fails fast on a mismatch.
 
 Writing an engine: implement the small protocol in
 [`src/rrlm/engines.py`](src/rrlm/engines.py) (an async `solve()` returning an
@@ -450,6 +455,36 @@ You can run everything against on-device models (no API keys, fully private). Th
 settled local stack (a MoE orchestrator + a cheap leaf) and the bake-off that chose it,
 with the performance numbers, are in [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md);
 bring it up with the `make serve-orch` / `make serve-leaf` targets.
+
+## Embedding: the typed contract and LM injection
+
+`solve()`/`asolve()` are a kwargs facade over a typed, versioned contract
+(`rrlm.solve/1`). Servers, workflow engines, and agents that want
+machine-stable types use it directly: build a `SolveRequest`, run it, and get
+a `SolveResult` whose `error` is a typed `RunError` with a stable category
+(`timeout`, `budget`, `execution`, `engine`) instead of a string to parse:
+
+```python
+from rrlm import SolveRequest, SolvePolicy, arun
+
+request = SolveRequest(
+    instruction="Total the amounts per vendor.",
+    inputs={"data": text},
+    policy=SolvePolicy(timeout_s=300, max_llm_calls=20),
+)
+result = await arun(request)          # or rrlm.run(request) from sync code
+if result.error and result.error.category == "budget":
+    ...
+```
+
+Embedders that do not use Pi at all can inject `dspy.LM` instances directly
+as `main_model`/`sub_model` (or `ModelSelection`): rrlm adopts foreign
+instances into its accounting model, so budgets, usage, and events keep
+working, and forces LM caching off (cache hits would falsify cost
+accounting). Configure reasoning on the LM you inject; `reasoning=` alongside
+an injected instance is rejected. See
+[`src/rrlm/contract.py`](src/rrlm/contract.py) for the contract and its
+versioning rules.
 
 ## Documentation map
 

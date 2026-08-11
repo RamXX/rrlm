@@ -357,6 +357,43 @@ def shutdown_interpreter(interpreter, timeout_s: float = 10.0) -> None:
     done.wait(timeout_s)
 
 
+def ensure_shared_lm(lm: dspy.LM, *, copy: bool = False) -> SharedLM:
+    """Adopt a caller-injected dspy.LM into rrlm's accounting model.
+
+    Budgets, per-run usage harvesting, and events all depend on SharedLM
+    semantics (identity no-arg copy + attach hooks), so a plain dspy.LM would
+    silently disable every ceiling. A SharedLM passes through unchanged
+    (unless ``copy=True``, used to build a distinct sibling instance for the
+    sub role); anything else is rebuilt as a SharedLM with the same model and
+    call configuration. Caching is forced off either way: rrlm measures real
+    calls, and a cache hit would falsify usage and cost accounting.
+    """
+    if isinstance(lm, SharedLM) and not copy:
+        return lm
+    kwargs = dict(getattr(lm, "kwargs", {}) or {})
+    kwargs.pop("cache", None)
+    # dspy stores these as named constructor params; re-pass them explicitly
+    # so reasoning-model variants (max_completion_tokens) do not collide.
+    named: dict = {}
+    for source in ("temperature",):
+        if kwargs.get(source) is not None:
+            named[source] = kwargs.pop(source)
+    max_tokens = kwargs.pop("max_tokens", None) or kwargs.pop("max_completion_tokens", None)
+    if max_tokens is not None:
+        named["max_tokens"] = max_tokens
+    return SharedLM(lm.model, cache=False, **named, **kwargs)
+
+
+def lm_is_local(lm: dspy.LM) -> bool:
+    """Whether an injected LM points at a local endpoint (loopback api_base).
+
+    Used only to widen the per-turn sandbox exec timeout the way resolved
+    local models do; wrong guesses degrade a timeout default, nothing else.
+    """
+    api_base = str((getattr(lm, "kwargs", {}) or {}).get("api_base") or "")
+    return any(host in api_base for host in ("localhost", "127.0.0.1", "0.0.0.0", "::1"))
+
+
 def _set_sandbox_exec_timeout(seconds: float) -> None:
     """Raise the JSPI backend per-turn exec timeout (default 300s).
 

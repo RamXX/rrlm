@@ -81,6 +81,11 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+# The default run is the offline suite: live-model `real` tests only run when
+# asked for explicitly (`pytest -m real`, which overrides this). Without this
+# line a bare `pytest` would attempt live endpoints and fail without
+# credentials, contradicting the marker's own documentation below.
+addopts = "-m 'not real'"
 # Hang tripwire: dump every thread's traceback and fail a test stuck >300s
 # (normal tests finish in well under 10s; one CI run hung silently for 19
 # minutes before this). Turns a silent job timeout into a diagnosable failure.

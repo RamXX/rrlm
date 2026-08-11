@@ -45,6 +45,14 @@ from typing import Any, Protocol, runtime_checkable
 
 ENTRY_POINT_GROUP = "rrlm.engines"
 
+# The engine contract version. Engine packages freeze on this protocol, so it
+# only changes with the contract itself: a breaking change to EngineRequest,
+# EngineResult, or the solve() semantics bumps the suffix, and an engine MAY
+# declare the protocol it was built against via a `protocol` class attribute -
+# the conformance suite then fails fast on a mismatch instead of letting a
+# stale adapter mis-parse requests at runtime.
+ENGINE_PROTOCOL = "rrlm.engine/1"
+
 
 @dataclass(frozen=True)
 class BudgetLease:

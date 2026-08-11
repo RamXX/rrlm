@@ -27,7 +27,14 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
-from rrlm.engines import BudgetLease, Engine, EngineCapabilities, EngineRequest, EngineResult
+from rrlm.engines import (
+    ENGINE_PROTOCOL,
+    BudgetLease,
+    Engine,
+    EngineCapabilities,
+    EngineRequest,
+    EngineResult,
+)
 
 
 @dataclass(frozen=True)
@@ -61,6 +68,12 @@ async def check_engine(
     caps = getattr(engine, "capabilities", None)
     if not isinstance(caps, EngineCapabilities):
         failures.append(f"engine.capabilities must be an EngineCapabilities, got {type(caps)!r}")
+    declared = getattr(engine, "protocol", None)
+    if declared is not None and declared != ENGINE_PROTOCOL:
+        failures.append(
+            f"engine declares protocol {declared!r} but this rrlm speaks "
+            f"{ENGINE_PROTOCOL!r}; rebuild the engine against the current contract"
+        )
     solve = getattr(engine, "solve", None)
     if not callable(solve) or not inspect.iscoroutinefunction(solve):
         failures.append("engine.solve must be an async function (async def solve(request))")

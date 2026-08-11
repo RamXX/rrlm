@@ -12,12 +12,25 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from rrlm.contract import (
+    ModelSelection,
+    RunError,
+    SolvePolicy,
+    SolveRequest,
+    SolveResult,
+    Usage,
+)
 from rrlm.session import Session
-from rrlm.solve import asolve, asolve_many, solve, solve_many
+from rrlm.solve import arun, asolve, asolve_many, run, solve, solve_many
 
 try:
     __version__ = version("rrlm")
 except PackageNotFoundError:  # running from a source tree without an install
     __version__ = "0.0.0+dev"
 
-__all__ = ["solve", "asolve", "solve_many", "asolve_many", "Session", "__version__"]
+__all__ = [
+    "solve", "asolve", "solve_many", "asolve_many",
+    "run", "arun", "SolveRequest", "SolveResult", "SolvePolicy",
+    "ModelSelection", "RunError", "Usage",
+    "Session", "__version__",
+]

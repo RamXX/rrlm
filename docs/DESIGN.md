@@ -81,6 +81,10 @@ Two consequences follow, and both are measured rather than asserted (see
   `error` as a string; the call itself raises only for *caller* mistakes
   (missing files, unknown engine, invalid parameter combinations). A raised
   exception means fix your call; an `error` value means the run failed.
+  Underneath the dict sits a typed, versioned contract (`rrlm.solve/1`,
+  `src/rrlm/contract.py`): `SolveRequest` in, `SolveResult` out, with
+  `RunError` categories (`timeout`, `budget`, `execution`, `engine`) for
+  machine consumers; `solve()` compiles into it and renders back.
 * **Nondeterminism is by design.** Temperature is 0.2 and LM caching is off
   (real calls are measured, never cache hits). Two runs of the same task may
   take different paths and different wall-clock times. Reliability comes from
@@ -105,8 +109,11 @@ Two consequences follow, and both are measured rather than asserted (see
 **Models come from Pi; there is no model registry.** rrlm resolves
 `provider/model` references from your existing Pi config (or plain env keys),
 so it never maintains its own catalog and never drifts from what you already
-run. Tradeoff: standalone users without Pi must pass explicit references, and
-model metadata is only as good as the config it reads.
+run. Embedders outside Pi can also inject `dspy.LM` instances directly;
+foreign instances are adopted into rrlm's accounting model (budgets, usage,
+events) rather than trusted blindly, and caching is forced off. Tradeoff:
+model metadata for references is only as good as the config it reads, and an
+injected LM's reasoning configuration is the caller's job.
 
 **One-shot solves by default; sessions are opt-in.** A stateless
 `solve(instruction, data)` is the simplest correct contract for a delegated

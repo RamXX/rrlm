@@ -37,12 +37,23 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 
 from rrlm.config import BACKENDS, HarnessConfig, load_env, resolve_backend
+from rrlm.contract import (
+    ModelSelection,
+    RunError,
+    SolvePolicy,
+    SolveRequest,
+    SolveResult,
+    Usage,
+)
 from rrlm.events import EventEmitter
 from rrlm.harness import (
+    BudgetExceededError,
     RunBudget,
     build_lm,
     build_rlm,
     document_skills_for,
+    ensure_shared_lm,
+    lm_is_local,
     make_signature,
     shutdown_interpreter,
 )
@@ -89,6 +100,7 @@ async def asolve(
     interpreter=None,
     mcp: list | None = None,
     on_event=None,
+    engine_options: dict | None = None,
 ) -> dict:
     """Run the RLM-first agent over (instruction, data); return answer + metrics.
 
@@ -148,37 +160,178 @@ async def asolve(
     (``run_started``, ``llm_call``, ``spawn_started``/``spawn_finished``,
     ``run_finished`` - see :mod:`rrlm.events`). The callback is synchronous,
     must be fast, and can never break the run (its exceptions are swallowed).
+
+    ``engine_options`` is an opaque engine-specific mapping passed through to
+    the selected engine untouched (requires ``engine=``).
+
+    This function is the kwargs facade over the typed contract: it compiles
+    into a :class:`rrlm.contract.SolveRequest`, runs :func:`arun`, and renders
+    the result back to this historic dict shape. Typed callers use
+    :func:`arun` / :func:`run` directly.
     """
-    # Validate the cheap, local things first: files and backend fail fast,
-    # before any model resolution or key loading.
-    if engine and interpreter is not None:
-        raise ValueError(
-            "engine= and interpreter= are mutually exclusive: engines are "
-            "stateless by contract and own their execution"
-        )
-    if engine and mcp:
-        raise ValueError("engine= and mcp= are mutually exclusive: engines own their tools")
-    if files:
-        missing = [str(p) for p in files if not Path(p).is_file()]
+    request = SolveRequest(
+        instruction=instruction,
+        inputs={"data": data},
+        files=tuple(str(p) for p in files or ()),
+        answer_type=answer_type,
+        engine=engine or None,
+        engine_options=dict(engine_options or {}),
+        policy=SolvePolicy(
+            backend=backend,
+            max_depth=max_depth,
+            max_iterations=max_iterations,
+            max_llm_calls=max_llm_calls,
+            max_spawns=max_spawns,
+            max_cost_usd=max_cost_usd,
+            max_action_retries=max_action_retries,
+            timeout_s=timeout_s,
+            reasoning=reasoning,
+            temperature=temperature,
+            web=web,
+        ),
+        models=ModelSelection(main=main_model, sub=sub_model),
+        tools=tuple(tools or ()),
+        skills=tuple(skills or ()),
+        doctrine=doctrine,
+        mcp=tuple(mcp or ()),
+        on_event=on_event,
+        session=interpreter,
+        reconcile_cost=reconcile_cost,
+        return_trace=return_trace,
+    )
+    result = await arun(request)
+    return result.to_legacy_dict(include_trace=return_trace)
+
+
+async def arun(request: SolveRequest) -> SolveResult:
+    """Run one typed :class:`SolveRequest` to a typed :class:`SolveResult`.
+
+    The typed twin of :func:`asolve`: run failures come back as
+    ``result.error`` (a :class:`rrlm.contract.RunError` with a stable
+    category), while caller mistakes raise from the call itself. See
+    :mod:`rrlm.contract` for the contract and its versioning.
+    """
+    # Validate the cheap, local things first: files fail fast, before any
+    # model resolution or key loading. (Cross-field validation lives on the
+    # request itself.)
+    if request.files:
+        missing = [p for p in request.files if not Path(p).is_file()]
         if missing:
             raise FileNotFoundError(f"input file(s) not found: {', '.join(missing)}")
 
-    emitter = EventEmitter(on_event) if on_event is not None else None
-    if engine:
+    emitter = EventEmitter(request.on_event) if request.on_event is not None else None
+    if request.engine:
         if emitter:
             emitter.emit(
-                "run_started", engine=engine,
-                instruction_chars=len(instruction), data_chars=len(data or ""),
+                "run_started", engine=request.engine,
+                instruction_chars=len(request.instruction), data_chars=len(request.data),
             )
-        result = await _solve_with_engine(
-            engine, instruction, data, files=files, answer_type=answer_type,
-            timeout_s=timeout_s, max_llm_calls=max_llm_calls, max_cost_usd=max_cost_usd,
-        )
+        result = await _solve_with_engine(request)
         if emitter:
             emitter.emit(
-                "run_finished", error=result["error"], wall_clock_s=result["wall_clock_s"]
+                "run_finished",
+                error=str(result.error) if result.error else None,
+                wall_clock_s=result.wall_clock_s,
             )
         return result
+    return await _solve_native(request, emitter)
+
+
+def run(request: SolveRequest) -> SolveResult:
+    """Synchronous wrapper around :func:`arun` (same contract)."""
+    return asyncio.run(arun(request))
+
+
+def _resolve_lms(main_sel, sub_sel, *, reasoning, temperature):
+    """Build the (main, sub) LMs from model references and/or injected instances.
+
+    Each selector is a Pi model reference string (resolved through
+    ``rrlm.pi_config`` and built with rrlm's reasoning/temperature/limit
+    handling) or an injected ``dspy.LM`` (adopted via
+    :func:`rrlm.harness.ensure_shared_lm` so budgets, events, and usage
+    accounting keep working - a plain LM would silently disable every
+    ceiling). With any injected instance, ``reasoning`` must be None: that
+    configuration belongs on the LM the caller built. Returns
+    ``(main_lm, sub_lm, main_ref, sub_ref, reasoning, local)``.
+    """
+    import dspy
+
+    injected = isinstance(main_sel, dspy.LM) or isinstance(sub_sel, dspy.LM)
+    if injected and reasoning is not None:
+        raise ValueError(
+            "reasoning= cannot be combined with an injected dspy.LM: configure "
+            "reasoning on the LM instance you inject"
+        )
+    defaults = HarnessConfig()
+
+    if isinstance(main_sel, dspy.LM):
+        main_lm = ensure_shared_lm(main_sel)
+        main_ref = str(getattr(main_sel, "model", "injected"))
+        main_local = lm_is_local(main_sel)
+        main_resolved = None
+    else:
+        main_resolved = resolve_model(main_sel)
+        if reasoning is None and not injected:
+            reasoning = "off" if main_resolved.supports_reasoning else "default"
+        main_lm = build_lm(
+            main_resolved,
+            min(defaults.main_max_tokens, main_resolved.max_tokens),
+            temperature,
+            reasoning=reasoning or "default",
+        )
+        main_ref, main_local = main_resolved.ref, main_resolved.is_local
+
+    if sub_sel is None:
+        # The sub role reuses the main model but needs its OWN instance:
+        # budget roles and per-role history harvesting attach per object.
+        if main_resolved is not None:
+            sub_lm = build_lm(
+                main_resolved,
+                min(defaults.sub_max_tokens, main_resolved.max_tokens),
+                temperature,
+                reasoning=reasoning or "default",
+            )
+        else:
+            sub_lm = ensure_shared_lm(main_sel, copy=True)
+        sub_ref, sub_local = main_ref, main_local
+    elif isinstance(sub_sel, dspy.LM):
+        sub_lm = ensure_shared_lm(sub_sel)
+        sub_ref = str(getattr(sub_sel, "model", "injected"))
+        sub_local = lm_is_local(sub_sel)
+    else:
+        sub_resolved = resolve_model(sub_sel)
+        sub_lm = build_lm(
+            sub_resolved,
+            min(defaults.sub_max_tokens, sub_resolved.max_tokens),
+            temperature,
+            reasoning=reasoning or "default",
+        )
+        sub_ref, sub_local = sub_resolved.ref, sub_resolved.is_local
+
+    return main_lm, sub_lm, main_ref, sub_ref, reasoning, main_local or sub_local
+
+
+async def _solve_native(request: SolveRequest, emitter) -> SolveResult:
+    """The predict-rlm harness path for one request."""
+    # Re-bind request fields to the local names the (long-lived, well-tested)
+    # body below has always used; the body itself is the same run loop.
+    policy = request.policy
+    instruction, data = request.instruction, request.data
+    files = list(request.files)
+    answer_type = request.answer_type
+    tools = list(request.tools)
+    skills = list(request.skills)
+    doctrine = request.doctrine
+    mcp = list(request.mcp)
+    interpreter = request.session
+    reconcile_cost = request.reconcile_cost
+    main_model, sub_model = request.models.main, request.models.sub
+    backend = policy.backend
+    reasoning, temperature, web = policy.reasoning, policy.temperature, policy.web
+    max_depth, max_iterations = policy.max_depth, policy.max_iterations
+    max_llm_calls, max_spawns = policy.max_llm_calls, policy.max_spawns
+    max_cost_usd, max_action_retries = policy.max_cost_usd, policy.max_action_retries
+    timeout_s = policy.timeout_s
 
     file_objs = None
     extra_skills = list(skills or [])
@@ -195,19 +348,16 @@ async def asolve(
     # Load .env first so OPENROUTER_API_KEY (the no-Pi path) is visible to model
     # resolution and to cost reconciliation.
     or_key = load_env()
-    main = resolve_model(main_model)
-    sub = resolve_model(sub_model) if sub_model else main
-
-    if reasoning is None:
-        reasoning = "off" if main.supports_reasoning else "default"
     if temperature is None:
         temperature = 0.2
-    local = main.is_local or sub.is_local
+    main_lm, sub_lm, main_ref, sub_ref, reasoning, local = _resolve_lms(
+        main_model, sub_model, reasoning=reasoning, temperature=temperature
+    )
 
     cfg = HarnessConfig(
-        main_model=main.ref,
-        sub_model=sub.ref,
-        reasoning=reasoning,
+        main_model=main_ref,
+        sub_model=sub_ref,
+        reasoning=reasoning or "default",
         temperature=temperature,
         backend=backend,
         max_depth=max_depth,
@@ -219,13 +369,6 @@ async def asolve(
         max_action_retries=max_action_retries,
         web=web,
     )
-
-    # Clamp per-turn caps to each model's real output limit so smaller models in
-    # someone else's Pi config don't trip a ValueError.
-    main_max = min(cfg.main_max_tokens, main.max_tokens)
-    sub_max = min(cfg.sub_max_tokens, sub.max_tokens)
-    main_lm = build_lm(main, main_max, temperature, reasoning=reasoning)
-    sub_lm = build_lm(sub, sub_max, temperature, reasoning=reasoning)
     main_start, sub_start = len(main_lm.history), len(sub_lm.history)
 
     # One budget object shared by both LMs and the whole spawn tree: this is
@@ -248,7 +391,7 @@ async def asolve(
             "run_started", backend=backend,
             instruction_chars=len(instruction), data_chars=len(data or ""),
         )
-    answer, error, spawn_stats = "", None, {}
+    answer, error, error_category, spawn_stats = "", None, "execution", {}
     prediction = None
     run_trace = None
     rlm = None
@@ -287,6 +430,7 @@ async def asolve(
             spawn_stats = dict(rlm.spawn_stats)
     except (asyncio.TimeoutError, TimeoutError):
         error = f"TimeoutError: run exceeded timeout_s={timeout_s}s"
+        error_category = "timeout"
     except Exception as exc:  # noqa: BLE001, return the failure to the caller
         # anyio-based components (MCP stdio clients) wrap a single real failure
         # in an ExceptionGroup during cleanup; unwrap so the error is readable.
@@ -294,6 +438,7 @@ async def asolve(
         while isinstance(cause, BaseExceptionGroup) and len(cause.exceptions) == 1:
             cause = cause.exceptions[0]
         error = f"{type(cause).__name__}: {cause}"
+        error_category = "budget" if isinstance(cause, BudgetExceededError) else "execution"
         # predict-rlm attaches the RunTrace to the exception; failure traces
         # are the most valuable GEPA signal, so capture them too.
         run_trace = getattr(exc, "trace", None)
@@ -318,7 +463,7 @@ async def asolve(
             answer=answer if isinstance(answer, str) else repr(answer),
             data_chars=len(data or ""), wall_clock_s=round(wall_clock_s, 2),
             error=error,
-            config={"main_model": main.ref, "sub_model": sub.ref, "reasoning": reasoning},
+            config={"main_model": main_ref, "sub_model": sub_ref, "reasoning": reasoning},
         )
 
     records = harvest_lm_history(main_lm, "main", main_start) + harvest_lm_history(
@@ -329,26 +474,25 @@ async def asolve(
         # reconcile blocks on HTTP + sleeps; keep the caller's loop responsive.
         await asyncio.to_thread(reconcile, records, or_key)
 
-    result = {
-        "answer": answer,
-        "error": error,
-        "wall_clock_s": round(wall_clock_s, 2),
-        "trace_file": trace_file,
-        "spawn_stats": spawn_stats,
-        "usage": summarize(records),
-        "config": {
-            "main_model": main.ref,
-            "sub_model": sub.ref,
+    return SolveResult(
+        answer=answer,
+        error=RunError(error_category, error) if error else None,
+        wall_clock_s=round(wall_clock_s, 2),
+        trace_file=trace_file,
+        spawn_stats=spawn_stats,
+        usage=Usage.from_dict(summarize(records)),
+        config={
+            "main_model": main_ref,
+            "sub_model": sub_ref,
             "reasoning": reasoning,
             "backend": backend,
             "web": web,
         },
-    }
-    if return_trace:
-        # The live RunTrace object, for programmatic consumers (rrlm.gepa needs
-        # it per evaluation). Not JSON-serializable; never set by the CLI.
-        result["trace"] = run_trace
-    return result
+        # The live RunTrace object, for programmatic consumers (rrlm.gepa reads
+        # it per evaluation). Not JSON-serializable; the legacy dict carries it
+        # only when return_trace was asked for.
+        trace=run_trace,
+    )
 
 
 def solve(instruction: str, data: str = "", **kwargs) -> dict:
@@ -360,44 +504,39 @@ def solve(instruction: str, data: str = "", **kwargs) -> dict:
     return asyncio.run(asolve(instruction, data, **kwargs))
 
 
-async def _solve_with_engine(
-    name: str,
-    instruction: str,
-    data: str,
-    *,
-    files: list[str | Path] | None,
-    answer_type: type | None,
-    timeout_s: float | None,
-    max_llm_calls: int,
-    max_cost_usd: float | None,
-) -> dict:
-    """Run one solve through an engine plugin; return the standard result dict.
+async def _solve_with_engine(request: SolveRequest) -> SolveResult:
+    """Run one request through its engine plugin; return a typed result.
 
-    The result has the same shape as the native path (answer, error,
-    wall_clock_s, trace_file, spawn_stats, usage, config) so callers and the
-    CLI need not care which path ran; ``config`` carries the engine name and
-    ``vendor`` appears only when the engine returned engine-specific artifacts.
-    The wall-clock ceiling is enforced here with the same cancel-the-run
-    semantics as the native path, so it binds even a misbehaving engine.
+    Rendered legacy, the result has the same shape as the native path so
+    callers and the CLI need not care which path ran; ``config`` carries the
+    engine name and ``vendor`` appears only when the engine returned
+    engine-specific artifacts. The wall-clock ceiling is enforced here with
+    the same cancel-the-run semantics as the native path, so it binds even a
+    misbehaving engine.
     """
     from rrlm.engines import BudgetLease, EngineRequest, get_engine
 
+    name = request.engine
+    timeout_s = request.policy.timeout_s
     eng = get_engine(name)
     trace_dir = os.environ.get("RRLM_TRACE_DIR")
-    request = EngineRequest(
-        instruction=instruction,
-        data=data,
-        files=tuple(str(p) for p in files or ()),
-        answer_type=answer_type,
+    engine_request = EngineRequest(
+        instruction=request.instruction,
+        data=request.data,
+        files=request.files,
+        answer_type=request.answer_type,
         budget=BudgetLease(
-            timeout_s=timeout_s, max_llm_calls=max_llm_calls, max_cost_usd=max_cost_usd
+            timeout_s=timeout_s,
+            max_llm_calls=request.policy.max_llm_calls,
+            max_cost_usd=request.policy.max_cost_usd,
         ),
         trace_dir=trace_dir,
+        options=request.engine_options,
     )
-    answer, error, engine_result = "", None, None
+    answer, error, error_category, engine_result = "", None, "engine", None
     t0 = time.monotonic()
     try:
-        coro = eng.solve(request)
+        coro = eng.solve(engine_request)
         if timeout_s and timeout_s > 0:
             engine_result = await asyncio.wait_for(coro, timeout=timeout_s)
         else:
@@ -405,8 +544,10 @@ async def _solve_with_engine(
         answer, error = engine_result.answer, engine_result.error
     except (asyncio.TimeoutError, TimeoutError):
         error = f"TimeoutError: run exceeded timeout_s={timeout_s}s"
+        error_category = "timeout"
     except Exception as exc:  # noqa: BLE001, return the failure to the caller
         error = f"{type(exc).__name__}: {exc}"
+        error_category = "execution"
     wall_clock_s = time.monotonic() - t0
 
     trace_file = engine_result.trace_file if engine_result else None
@@ -418,28 +559,26 @@ async def _solve_with_engine(
             trace_dir,
             {
                 "trace_file": os.path.basename(trace_file) if trace_file else None,
-                "instruction": (instruction or "")[:500],
+                "instruction": (request.instruction or "")[:500],
                 "answer": (answer if isinstance(answer, str) else repr(answer))[:500],
                 "error": error,
-                "data_chars": len(data or ""),
+                "data_chars": len(request.data),
                 "wall_clock_s": round(wall_clock_s, 2),
                 "config": {"engine": name},
                 "engine": name,
             },
         )
 
-    result = {
-        "answer": answer,
-        "error": error,
-        "wall_clock_s": round(wall_clock_s, 2),
-        "trace_file": trace_file,
-        "spawn_stats": {},
-        "usage": dict(engine_result.usage) if engine_result else {},
-        "config": {"engine": name},
-    }
-    if engine_result and engine_result.vendor:
-        result["vendor"] = engine_result.vendor
-    return result
+    return SolveResult(
+        answer=answer,
+        error=RunError(error_category, error) if error else None,
+        wall_clock_s=round(wall_clock_s, 2),
+        trace_file=trace_file,
+        spawn_stats={},
+        usage=Usage.from_dict(engine_result.usage if engine_result else {}),
+        config={"engine": name},
+        vendor=(engine_result.vendor or None) if engine_result else None,
+    )
 
 
 def _many_task(instructions: list[str]) -> str:
@@ -611,6 +750,13 @@ def main() -> None:
              "flags are ignored with an engine; budget flags still apply.",
     )
     parser.add_argument(
+        "--engine-option", action="append", dest="engine_options", default=None,
+        metavar="KEY=VALUE",
+        help="engine-specific option passed through to the selected engine untouched "
+             "(repeatable; requires --engine). VALUE is parsed as JSON when it is "
+             "valid JSON, else kept as a string.",
+    )
+    parser.add_argument(
         "--answer-type", default=None, choices=sorted(ANSWER_TYPES),
         help="type the final answer is parsed into (single-question runs); "
              "'json' = a JSON object, 'list' = a list of strings",
@@ -668,6 +814,18 @@ def main() -> None:
 
         mcp = [MCPServerSpec.parse(spec) for spec in args.mcp]
 
+    engine_options = None
+    if args.engine_options:
+        engine_options = {}
+        for item in args.engine_options:
+            key, sep, value = item.partition("=")
+            if not sep or not key:
+                parser.error(f"--engine-option needs KEY=VALUE, got {item!r}")
+            try:
+                engine_options[key] = json.loads(value)
+            except json.JSONDecodeError:
+                engine_options[key] = value
+
     on_event = None
     if args.events:
         # stdout carries the answer/result; events stream on stderr as JSONL.
@@ -693,6 +851,7 @@ def main() -> None:
         doctrine=doctrine,
         mcp=mcp,
         on_event=on_event,
+        engine_options=engine_options,
     )
 
     data = _read_data(args.data)
