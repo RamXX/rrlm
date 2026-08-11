@@ -49,12 +49,25 @@ Two consequences follow, and both are measured rather than asserted (see
   skill shipped for Pi encodes exactly this rule.
 * **Latency-sensitive paths.** A solve is a multi-turn agent run (tens of
   seconds to minutes), not a single completion.
-* **Conversational assistants.** There is no chat history. A `Session`
-  persists the *REPL namespace* between calls, not a conversation; if you
-  need dialogue memory, put rrlm behind an agent that has it.
-* **Byte-reproducible pipelines.** Runs are intentionally not deterministic
-  (see "Expected behavior"). If you need identical replays, a fixed script or
-  a deterministic engine plugin is the right tool, not the live harness.
+* **A standalone conversational assistant.** rrlm itself keeps no chat
+  history: nothing re-reads a transcript. The conversation layer is
+  deliberately someone else's job, and the shipped composition provides it:
+  behind [Pi](../pi/README.md), the agent carries the dialogue and delegates
+  data work to `rlm_solve` (today each delegation is an independent one-shot;
+  the extension does not yet hold a `Session` open across a conversation).
+  Library users get multi-turn *computation* through `Session`, which
+  persists the REPL namespace (variables, parsed data, helpers) between
+  calls, with instructions naming what earlier calls created. What rrlm alone
+  cannot give you is dialogue memory.
+* **Byte-reproducible pipelines on the live harness.** The LLM-driven
+  harness is intentionally nondeterministic (see "Expected behavior");
+  reliability there comes from in-run verification, not replayability. When
+  you need identical replays, rrlm still serves them, through the engine
+  plugin route: an engine that computes deterministically (a symbolic solver,
+  a compiled strategy) returns identical output for identical input through
+  the same `solve()` contract, budgets, and trace history. The in-tree
+  `reference` engine is a working example. Route with `engine=`; just do not
+  expect determinism from the live harness itself.
 * **Untrusted input on the default backend.** The default `supervisor`
   backend executes model-written Python on your host. For adversarial or
   unvetted data, choose `jspi` or `sbx` explicitly, or route to a sealed

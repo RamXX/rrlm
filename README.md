@@ -86,11 +86,14 @@ CSVs, document sets, codebases; or when you want a **small local model doing
 verified, code-first work** at $0.
 
 Skip it when the data is small (under roughly 12k tokens the REPL scaffold
-costs more than it saves; just read the data in context), when you need
-low latency (a solve is an agent run, not a completion), when you need
-conversation memory (sessions persist variables, not dialogue), or when you
-need byte-identical replays (runs are intentionally nondeterministic;
-reliability comes from in-run verification). The full reasoning, with the
+costs more than it saves; just read the data in context) or when you need low
+latency (a solve is an agent run, not a completion). Two capabilities live in
+specific places rather than in the core: conversation comes from the host
+agent (behind Pi, the agent carries the dialogue and delegates data work to
+rrlm; a library `Session` persists computed state, not chat), and
+byte-identical replays come from deterministic engine plugins (the live LLM
+harness is intentionally nondeterministic; a symbolic or compiled-strategy
+engine behind `engine=` replays exactly). The full reasoning, with the
 tradeoffs behind each default, is in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Models come from Pi
