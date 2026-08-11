@@ -200,6 +200,32 @@ predict-rlm). The budgets are **global to the run**: they are shared across the 
   per-call overhead low). Prefer `jspi` or `sbx` when the data or task is untrusted.
   See [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md).
 
+## Multi-turn sessions (a persistent REPL namespace)
+
+One-shot `solve()` calls forget everything they computed. A `Session` keeps the
+supervisor interpreter - and with it the whole REPL namespace: variables,
+parsed structures, defined helpers - alive across calls, so follow-ups build
+on completed work instead of re-paying the data load and the scaffold:
+
+```python
+from rrlm import Session
+
+with Session(main_model="openrouter/qwen/qwen3.6-27b") as session:
+    session.solve("Parse the ledger into `entries`; report the row count.", data=text)
+    session.solve("Using `entries`, total the amounts per vendor.")
+    session.solve("Which vendor's total changed most vs last quarter's `entries`?")
+```
+
+What persists is the **interpreter namespace**, not conversation history: each
+call is still its own agent run with fresh budgets and its own trace, so
+instructions should name the variables earlier calls created. `reset()`
+clears the namespace without ending the session; `close()` (or the context
+manager) releases the interpreter process. Sessions run on the `supervisor`
+backend (trusted data) only; changing the tool set between calls (e.g.
+toggling `web=`) starts a fresh namespace by design. For warm `sbx`
+containers across one-shot runs (filesystem persistence, not namespace
+persistence) use `RRLM_SBX_NAME`.
+
 ## Engine plugins (route a run to another solver)
 
 The built-in predict-rlm harness is one way to fill the solve contract

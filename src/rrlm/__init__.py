@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from rrlm.session import Session
 from rrlm.solve import asolve, asolve_many, solve, solve_many
 
 try:
@@ -19,4 +20,4 @@ try:
 except PackageNotFoundError:  # running from a source tree without an install
     __version__ = "0.0.0+dev"
 
-__all__ = ["solve", "asolve", "solve_many", "asolve_many", "__version__"]
+__all__ = ["solve", "asolve", "solve_many", "asolve_many", "Session", "__version__"]

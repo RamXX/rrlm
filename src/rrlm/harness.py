@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import os
 import threading
@@ -329,6 +330,7 @@ def build_rlm(
     extra_tools: list[Callable] | None = None,
     extra_skills: list[Skill] | None = None,
     doctrine: str | None = None,
+    interpreter=None,
 ) -> PredictRLM:
     """Construct the agent for one depth level.
 
@@ -338,7 +340,17 @@ def build_rlm(
     and file inputs, ``extra_tools``/``extra_skills`` are caller-provided
     host-side tools and predict-rlm Skill bundles, and ``doctrine`` overrides
     the built-in doctrine text (the RLM-GEPA optimization target).
+
+    ``interpreter`` (supervisor backend only) injects a caller-owned
+    DirectPythonBackend kept alive across runs - the mechanism behind
+    :class:`rrlm.Session`. Interpreter ownership is tracked on the returned
+    module: ``rlm.rrlm_owned_interpreter`` is the backend this call created
+    (whoever runs the rlm must shut it down after the run - predict-rlm treats
+    every ``interpreter=`` as caller-owned and never will), or None when the
+    interpreter was injected or the backend manages its own lifecycle.
     """
+    if interpreter is not None and cfg.backend != "supervisor":
+        raise ValueError(f"interpreter= requires backend='supervisor', got {cfg.backend!r}")
     spawn_stats = spawn_stats if spawn_stats is not None else Counter()
     tools: list[Callable] = []
     if depth < cfg.max_depth:
@@ -380,12 +392,21 @@ def build_rlm(
     # installed build supports it (e.g. a patched/forked predict-rlm).
     if "max_action_generation_retries" in _PREDICT_RLM_PARAMS:
         rlm_kwargs["max_action_generation_retries"] = cfg.max_action_retries
+    owned_interpreter = None
     if cfg.backend == "supervisor":
-        from predict_rlm import DirectPythonBackend
+        if interpreter is not None:
+            # Caller-owned (a Session): reused across runs, never shut down here.
+            # dspy re-injects tools per run (resetting _tools_registered) but
+            # not output fields; reset that flag too so a reused interpreter
+            # re-registers typed-answer fields when the signature changes.
+            if hasattr(interpreter, "_output_fields_registered"):
+                interpreter._output_fields_registered = False
+            rlm_kwargs["interpreter"] = interpreter
+        else:
+            from predict_rlm import DirectPythonBackend
 
-        rlm_kwargs["interpreter"] = DirectPythonBackend(
-            exec_timeout=cfg.sandbox_exec_timeout
-        )
+            owned_interpreter = DirectPythonBackend(exec_timeout=cfg.sandbox_exec_timeout)
+            rlm_kwargs["interpreter"] = owned_interpreter
     elif cfg.backend == "sbx":
         from predict_rlm import SbxConfig
 
@@ -405,6 +426,7 @@ def build_rlm(
 
     rlm = PredictRLM(signature or RlmTask, **rlm_kwargs)
     rlm.spawn_stats = spawn_stats  # surfaced in the run result
+    rlm.rrlm_owned_interpreter = owned_interpreter  # None unless this call created one
     return rlm
 
 
@@ -442,7 +464,14 @@ def _make_rlm_spawn(
             budget=budget, extra_tools=extra_tools, extra_skills=extra_skills,
             doctrine=doctrine,
         )
-        prediction = await child.acall(task=task, data=data)
+        try:
+            prediction = await child.acall(task=task, data=data)
+        finally:
+            # Children always get their own interpreter (never the session's:
+            # child runs must not read or pollute a persistent namespace), so
+            # release the child's runner process here or it outlives the spawn.
+            if child.rrlm_owned_interpreter is not None:
+                await asyncio.to_thread(child.rrlm_owned_interpreter.shutdown)
         return prediction.answer
 
     return rlm_spawn

@@ -77,6 +77,7 @@ async def asolve(
     doctrine: str | None = None,
     reconcile_cost: bool = True,
     return_trace: bool = False,
+    interpreter=None,
 ) -> dict:
     """Run the RLM-first agent over (instruction, data); return answer + metrics.
 
@@ -119,9 +120,20 @@ async def asolve(
     ignored (the engine owns its own models and execution), while ``timeout_s``
     stays enforced host-side and the call/cost ceilings are passed down as the
     engine's budget lease.
+
+    ``interpreter`` (advanced; supervisor backend only) is a caller-owned
+    predict-rlm DirectPythonBackend reused across calls so the REPL namespace
+    persists - the caller manages its shutdown. Use :class:`rrlm.Session`
+    rather than passing this directly. Without it, the run's interpreter is
+    created and shut down here, per call.
     """
     # Validate the cheap, local things first: files and backend fail fast,
     # before any model resolution or key loading.
+    if engine and interpreter is not None:
+        raise ValueError(
+            "engine= and interpreter= are mutually exclusive: engines are "
+            "stateless by contract and own their execution"
+        )
     if files:
         missing = [str(p) for p in files if not Path(p).is_file()]
         if missing:
@@ -141,6 +153,9 @@ async def asolve(
         file_objs = [File(path=str(p)) for p in files]
         extra_skills = document_skills_for(files) + extra_skills
     backend = resolve_backend(backend)
+    if interpreter is not None and backend != "supervisor":
+        # A config error, not a run failure: raise before anything executes.
+        raise ValueError(f"interpreter= requires backend='supervisor', got {backend!r}")
 
     # Load .env first so OPENROUTER_API_KEY (the no-Pi path) is visible to model
     # resolution and to cost reconciliation.
@@ -192,13 +207,14 @@ async def asolve(
     answer, error, spawn_stats = "", None, {}
     prediction = None
     run_trace = None
+    rlm = None
     t0 = time.monotonic()
     try:
         rlm = build_rlm(
             cfg, main_lm, sub_lm,
             signature=make_signature(answer_type, with_files=bool(file_objs)),
             budget=budget, extra_tools=tools, extra_skills=extra_skills,
-            doctrine=doctrine,
+            doctrine=doctrine, interpreter=interpreter,
         )
         call_kwargs: dict = {"task": instruction, "data": data}
         if file_objs:
@@ -219,6 +235,14 @@ async def asolve(
         # predict-rlm attaches the RunTrace to the exception; failure traces
         # are the most valuable GEPA signal, so capture them too.
         run_trace = getattr(exc, "trace", None)
+    finally:
+        # predict-rlm treats interpreter= as caller-owned and never shuts it
+        # down; when this run created its own (supervisor backend, no Session),
+        # release the runner process here or every solve() leaks one until the
+        # host process exits. Session-injected interpreters stay alive by design.
+        owned = getattr(rlm, "rrlm_owned_interpreter", None)
+        if owned is not None:
+            await asyncio.to_thread(owned.shutdown)
     wall_clock_s = time.monotonic() - t0
 
     # Capture the predict-rlm RunTrace for later RLM-GEPA, if RRLM_TRACE_DIR is set.
