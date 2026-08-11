@@ -31,7 +31,13 @@ _RRLM_ENV_VARS = (
 
 
 @pytest.fixture(autouse=True)
-def _clean_rrlm_env(monkeypatch):
+def _clean_rrlm_env(request, monkeypatch):
+    # Live-model `real` tests are the exception: RRLM_MAIN/RRLM_SUB is the
+    # documented way to point them at a model (`RRLM_MAIN=... pytest -m real`),
+    # so stripping the env there made that instruction a no-op and the evals
+    # fell back to whatever Pi's default model happened to be.
+    if request.node.get_closest_marker("real"):
+        return
     for var in _RRLM_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
 
