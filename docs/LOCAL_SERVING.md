@@ -1,5 +1,7 @@
 # Local model serving (offline, $0 inference)
 
+> rrlm docs: [README](../README.md) | [Design](DESIGN.md) | [CI](CI.md) | [Benchmarks and findings](FINDINGS.md) | Local serving (this page) | [Pi integration](../pi/README.md)
+
 rrlm runs against on-device models with no API keys and full privacy. This is the
 optional power-user path; for first use, any model configured in Pi (including a
 cloud one) works without any of this.

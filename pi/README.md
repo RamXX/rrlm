@@ -1,5 +1,7 @@
 # rrlm as a Pi backend
 
+> rrlm docs: [README](../README.md) | [Design](../docs/DESIGN.md) | [CI](../docs/CI.md) | [Benchmarks and findings](../docs/FINDINGS.md) | [Local serving](../docs/LOCAL_SERVING.md) | Pi integration (this page)
+
 This wires the RLM-first harness into [pi](https://github.com/earendil-works/pi)
 as a delegatable tool, so a pi agent can offload data-heavy subtasks to the
 recursive-language-model harness instead of pulling large data into its own

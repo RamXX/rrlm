@@ -1,15 +1,15 @@
 # rrlm
 
-[![CI: Dagger](https://img.shields.io/badge/CI-Dagger-131226?logo=dagger&logoColor=white)](docs/CI.md)
-[![not GitHub Actions](https://img.shields.io/badge/not-GitHub%20Actions-lightgrey)](docs/CI.md)
+[![CI](https://github.com/RamXX/rrlm/actions/workflows/ci.yml/badge.svg)](https://github.com/RamXX/rrlm/actions/workflows/ci.yml)
+[![CI: Dagger](https://img.shields.io/badge/portable%20gate-Dagger-131226?logo=dagger&logoColor=white)](docs/CI.md)
 [![coverage 96%](https://img.shields.io/badge/coverage-96%25-brightgreen)](docs/CI.md)
-[![tests 226 passing](https://img.shields.io/badge/tests-226%20passing-brightgreen)](tests)
+[![tests 292 passing](https://img.shields.io/badge/tests-292%20passing-brightgreen)](tests)
 [![license MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-> CI runs as a provider-agnostic [Dagger](https://dagger.io) pipeline (`make ci`), not
-> GitHub Actions. These are static badges reflecting the gate (`dagger call ci`: ruff +
-> the fully offline suite, 80% coverage floor); wire any provider to `dagger call ci`
-> for live status. See [docs/CI.md](docs/CI.md).
+> The canonical CI gate is a provider-agnostic [Dagger](https://dagger.io) pipeline
+> (`make ci` = `dagger call ci`: ruff + the fully offline suite, 80% coverage floor);
+> GitHub Actions runs the same contract natively for live status. See
+> [docs/CI.md](docs/CI.md).
 
 An **RLM-first backend for the [Pi coding agent](https://github.com/earendil-works/pi)**,
 and a demonstration that the Recursive Language Model (RLM) is a **posture for quality
@@ -38,6 +38,60 @@ We prove it two ways:
 
 It ships as a Pi tool (`rlm_solve`) plus a routing skill, a CLI (`rrlm-solve`), and a
 library (`from rrlm import solve`). Built on [`predict-rlm`](https://pypi.org/project/predict-rlm/).
+The reasoning behind the design, its tradeoffs, and when this is the wrong tool are in
+[docs/DESIGN.md](docs/DESIGN.md).
+
+## Getting started
+
+Three commands to a working install, the first answer needs **no model and no
+API key**:
+
+```bash
+# 1. Install (clones into ~/.rrlm, sets up the env, puts the CLIs on PATH)
+curl -fsSL https://raw.githubusercontent.com/RamXX/rrlm/main/install.sh | bash
+
+# 2. Prove the install end to end with the built-in reference engine
+#    (deterministic, offline, model-free): counts the lines of stdin.
+printf 'alpha\nbeta\ngamma\n' | rrlm-solve --engine reference -i count-lines -d -
+# -> 3
+
+# 3. Check what your environment can do (Pi config, credentials, backends, engines)
+rrlm-doctor
+```
+
+Then run a first real solve. Any of these work; pick the one that matches what
+you have:
+
+```bash
+# You use Pi: no flags needed, rrlm uses the model Pi is currently set to.
+rrlm-solve -i "Which product id has the most negative reviews?" -d @reviews.csv
+
+# You have an OpenRouter key (no Pi needed):
+OPENROUTER_API_KEY=... rrlm-solve --main openrouter/qwen/qwen3.6-27b -i "..." -d @data.txt
+
+# You have any provider's key (OpenAI shown; Anthropic etc. work the same):
+OPENAI_API_KEY=... rrlm-solve --main openai/gpt-5.1 -i "..." -d @data.txt
+```
+
+Where to next: [use it from Pi, the CLI, or Python](#use-it) for the full
+surface (typed answers, files, multi-question runs, sessions),
+[when to use it and when not](#when-to-use-it-and-when-not) before you commit,
+and the [documentation map](#documentation-map) for everything else.
+
+## When to use it, and when not
+
+Reach for rrlm when the work is **exact computation or per-item judgment over
+data too large (or too costly) to put in a prompt**: ledgers, logs, large
+CSVs, document sets, codebases; or when you want a **small local model doing
+verified, code-first work** at $0.
+
+Skip it when the data is small (under roughly 12k tokens the REPL scaffold
+costs more than it saves; just read the data in context), when you need
+low latency (a solve is an agent run, not a completion), when you need
+conversation memory (sessions persist variables, not dialogue), or when you
+need byte-identical replays (runs are intentionally nondeterministic;
+reliability comes from in-run verification). The full reasoning, with the
+tradeoffs behind each default, is in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Models come from Pi
 
@@ -388,6 +442,20 @@ You can run everything against on-device models (no API keys, fully private). Th
 settled local stack (a MoE orchestrator + a cheap leaf) and the bake-off that chose it,
 with the performance numbers, are in [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md);
 bring it up with the `make serve-orch` / `make serve-leaf` targets.
+
+## Documentation map
+
+| Document | What it covers |
+| --- | --- |
+| README (this page) | Install, getting started, the full usage surface |
+| [docs/DESIGN.md](docs/DESIGN.md) | Design choices and tradeoffs, expected behavior, ideal use cases, when rrlm is the wrong tool |
+| [docs/FINDINGS.md](docs/FINDINGS.md) | Benchmark methodology and results: RLM vs context-stuffing |
+| [docs/LOCAL_SERVING.md](docs/LOCAL_SERVING.md) | The settled local model stack ($0, offline) and the bake-off that chose it |
+| [docs/CI.md](docs/CI.md) | The portable Dagger CI gate, the GitHub Actions workflow, and why repeat runs are fast |
+| [pi/README.md](pi/README.md) | Wiring rrlm into Pi: the `rlm_solve` tool and the routing skill |
+| [examples/crm](examples/crm) | The code-generation showcase: a local 35B model builds a Go CRM |
+| [experiments/superpowers](experiments/superpowers) | Beyond-context tasks the RLM solves that stuffing cannot |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute; test and lint expectations |
 
 ## Development
 

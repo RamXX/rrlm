@@ -1,5 +1,7 @@
 # CI
 
+> rrlm docs: [README](../README.md) | [Design](DESIGN.md) | CI (this page) | [Benchmarks and findings](FINDINGS.md) | [Local serving](LOCAL_SERVING.md) | [Pi integration](../pi/README.md)
+
 rrlm's canonical CI gate is a [Dagger](https://dagger.io) module. The pipeline
 lives in the repo (`dagger.json` plus `dagger/`) and runs the same offline test
 suite a developer runs locally; any provider (or any laptop) runs it with a

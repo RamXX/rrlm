@@ -1,5 +1,7 @@
 # Findings: RLM-first vs context-stuffing (qwen3.7-max, 2026-06-12)
 
+> rrlm docs: [README](../README.md) | [Design](DESIGN.md) | [CI](CI.md) | Benchmarks and findings (this page) | [Local serving](LOCAL_SERVING.md) | [Pi integration](../pi/README.md)
+
 > **Scope note (read first).** This document records the RLM-vs-baseline benchmark
 > methodology and results, which stand. Its local-serving conclusion further down
 > ("Final orchestrator: pi-tune Q6_K", 2026-06-17) is a point-in-time result that was
