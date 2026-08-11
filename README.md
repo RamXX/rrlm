@@ -267,8 +267,10 @@ rrlm-doctor                                                  # lists installed e
 
 ## MCP tools and progress events (opt-in)
 
-Mount any stdio MCP server's tools as awaitable host tools for a run (needs
-the `mcp` extra: `uv sync --extra mcp`):
+Mount any MCP server's tools as awaitable host tools for a run (needs the
+`mcp` extra: `uv sync --extra mcp`). Remote servers over **streamable HTTP**
+are the preferred form; local stdio subprocesses and the legacy HTTP+SSE
+transport are also supported:
 
 ```python
 from rrlm import solve
@@ -276,13 +278,27 @@ from rrlm.mcptools import MCPServerSpec
 
 result = solve(
     "Look up the vendor in the CRM and report its status.", data=text,
-    mcp=[MCPServerSpec(command="crm-mcp-server", allow=("lookup_vendor",))],
+    mcp=[
+        MCPServerSpec(url="https://crm.example.com/mcp",           # streamable HTTP
+                      headers={"Authorization": "Bearer ..."},
+                      allow=("lookup_vendor",)),
+        MCPServerSpec(command="local-tools-server"),               # stdio subprocess
+        MCPServerSpec(url="https://old.example.com/sse",           # legacy SSE
+                      transport="sse"),
+    ],
 )
 ```
 
 ```bash
-rrlm-solve --mcp "crm-mcp-server --profile prod" -i "..." -d @file
+rrlm-solve --mcp https://crm.example.com/mcp -i "..." -d @file    # streamable HTTP
+rrlm-solve --mcp "crm-mcp-server --profile prod" ...              # stdio command
+rrlm-solve --mcp sse+https://old.example.com/sse ...              # legacy SSE
 ```
+
+Protocol generations are negotiated by the SDK at `initialize`, so servers on
+the current stateless-HTTP revision and servers still on older stateful
+revisions both work; the offline suite exercises all three transports and
+both server styles against a real MCP server subprocess.
 
 The agent sees each tool's name and description and calls
 `await tool_name(...)` from the REPL; connections live exactly as long as the

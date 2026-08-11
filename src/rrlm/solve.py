@@ -633,9 +633,11 @@ def main() -> None:
         help="override the built-in doctrine with the text in PATH (e.g. an RLM-GEPA winner)",
     )
     parser.add_argument(
-        "--mcp", action="append", dest="mcp", default=None, metavar="CMD",
-        help="mount a stdio MCP server's tools for this run (a shell-quoted command "
-             "line, repeatable; needs the 'mcp' extra). Tools run host-side.",
+        "--mcp", action="append", dest="mcp", default=None, metavar="SPEC",
+        help="mount an MCP server's tools for this run (repeatable; needs the 'mcp' "
+             "extra). SPEC is an http(s):// URL (streamable HTTP, preferred), "
+             "sse+http(s):// for legacy SSE servers, or a shell-quoted command line "
+             "for a local stdio server. Tools run host-side.",
     )
     parser.add_argument(
         "--events", action="store_true",

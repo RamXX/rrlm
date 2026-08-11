@@ -10,7 +10,11 @@ observe the callback stream on both the native and the engine path.
 from __future__ import annotations
 
 import asyncio
+import socket
+import subprocess
 import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -33,11 +37,41 @@ def test_spec_parse_shell_splits():
     spec = MCPServerSpec.parse("uvx some-server --flag 'a b'")
     assert spec.command == "uvx"
     assert spec.args == ("some-server", "--flag", "a b")
+    assert spec.resolved_transport() == "stdio"
 
 
 def test_spec_parse_rejects_empty():
     with pytest.raises(ValueError, match="empty"):
         MCPServerSpec.parse("   ")
+
+
+def test_spec_parse_url_is_streamable_http():
+    spec = MCPServerSpec.parse("https://crm.example.com/mcp")
+    assert spec.url == "https://crm.example.com/mcp"
+    assert spec.command is None
+    assert spec.resolved_transport() == "http"
+
+
+def test_spec_parse_sse_prefix_forces_legacy_transport():
+    spec = MCPServerSpec.parse("sse+https://old.example.com/sse")
+    assert spec.url == "https://old.example.com/sse"
+    assert spec.resolved_transport() == "sse"
+
+
+def test_spec_requires_exactly_one_of_command_or_url():
+    with pytest.raises(ValueError, match="exactly one"):
+        MCPServerSpec(command="x", url="https://example.com/mcp")
+    with pytest.raises(ValueError, match="exactly one"):
+        MCPServerSpec()
+
+
+def test_spec_rejects_transport_source_mismatch():
+    with pytest.raises(ValueError, match="needs url="):
+        MCPServerSpec(command="x", transport="http")
+    with pytest.raises(ValueError, match="needs command="):
+        MCPServerSpec(url="https://example.com/mcp", transport="stdio")
+    with pytest.raises(ValueError, match="unknown MCP transport"):
+        MCPServerSpec(url="https://example.com/mcp", transport="websocket")
 
 
 def _tool(name: str):
@@ -110,6 +144,68 @@ def test_engine_rejects_mcp():
 
 
 # --- integration: real MCP server, real stack --------------------------------
+
+
+@contextmanager
+def _served_mcp(transport: str, *extra: str):
+    """Run the MCP stub server over a network transport; yield its base URL.
+
+    Readiness is a real TCP accept on the bound port (uvicorn startup is not
+    instant); teardown terminates the subprocess so no server outlives a test.
+    """
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    proc = subprocess.Popen(
+        [sys.executable, str(TESTS_DIR / "mcp_stub_server.py"), transport, str(port), *extra],
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+    )
+    try:
+        deadline = time.monotonic() + 30.0
+        while True:
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
+                break
+            except OSError:
+                if proc.poll() is not None:
+                    raise RuntimeError(f"mcp server exited early: {proc.stderr.read()}") from None
+                if time.monotonic() > deadline:
+                    raise RuntimeError("mcp server did not become ready in time") from None
+                time.sleep(0.1)
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("server_args", "path", "transport"),
+    [
+        pytest.param(("streamable-http",), "/mcp", None, id="http-stateful"),
+        pytest.param(("streamable-http", "--stateless"), "/mcp", None, id="http-stateless"),
+        pytest.param(("sse",), "/sse", "sse", id="sse-legacy"),
+    ],
+)
+def test_remote_mcp_transports_end_to_end(stub_model, server_args, path, transport):
+    """One assertion set across streamable HTTP (both server styles) and SSE.
+
+    The stateless/stateful pair matters: current MCP servers are stateless by
+    default while many published servers still run the older stateful style,
+    and rrlm must mount either without caring which it got.
+    """
+    model = stub_model("mcptool")
+    with _served_mcp(*server_args) as base:
+        spec = MCPServerSpec(url=base + path, transport=transport)
+        result = solve(
+            "add the numbers with the mounted tool", DATA,
+            main_model=model, backend="supervisor", max_iterations=5, mcp=[spec],
+        )
+    assert result["error"] is None
+    assert result["answer"] == "42"
 
 
 @pytest.mark.integration
