@@ -117,6 +117,7 @@ class SharedLM(dspy.LM):
 
     _rrlm_budget: RunBudget | None = None
     _rrlm_role: str = "main"
+    _rrlm_emitter = None  # rrlm.events.EventEmitter, when the caller wants progress
 
     def copy(self, **kwargs):
         if not kwargs:
@@ -125,6 +126,10 @@ class SharedLM(dspy.LM):
 
     def attach_budget(self, budget: RunBudget, role: str) -> None:
         self._rrlm_budget = budget
+        self._rrlm_role = role
+
+    def attach_events(self, emitter, role: str) -> None:
+        self._rrlm_emitter = emitter
         self._rrlm_role = role
 
     def _budget_precheck(self) -> None:
@@ -139,16 +144,37 @@ class SharedLM(dspy.LM):
         if self._rrlm_budget is not None:
             self._rrlm_budget.register_cost(_response_cost(response))
 
+    def _emit_call(self, response) -> None:
+        if self._rrlm_emitter is None:
+            return
+        usage = getattr(response, "usage", None)
+
+        def field(name: str):
+            if isinstance(usage, dict):
+                return usage.get(name)
+            return getattr(usage, name, None)
+
+        self._rrlm_emitter.emit(
+            "llm_call",
+            role=self._rrlm_role,
+            model=self.model,
+            prompt_tokens=field("prompt_tokens"),
+            completion_tokens=field("completion_tokens"),
+            cost_usd=_response_cost(response),
+        )
+
     def forward(self, *args, **kwargs):
         self._budget_precheck()
         response = super().forward(*args, **kwargs)
         self._budget_register(response)
+        self._emit_call(response)
         return response
 
     async def aforward(self, *args, **kwargs):
         self._budget_precheck()
         response = await super().aforward(*args, **kwargs)
         self._budget_register(response)
+        self._emit_call(response)
         return response
 
 
@@ -334,6 +360,7 @@ def build_rlm(
     extra_skills: list[Skill] | None = None,
     doctrine: str | None = None,
     interpreter=None,
+    emitter=None,
 ) -> PredictRLM:
     """Construct the agent for one depth level.
 
@@ -361,7 +388,7 @@ def build_rlm(
             _make_rlm_spawn(
                 cfg, main_lm, sub_lm, depth, spawn_stats,
                 budget=budget, extra_tools=extra_tools,
-                extra_skills=extra_skills, doctrine=doctrine,
+                extra_skills=extra_skills, doctrine=doctrine, emitter=emitter,
             )
         )
     if extra_tools:
@@ -444,6 +471,7 @@ def _make_rlm_spawn(
     extra_tools: list[Callable] | None = None,
     extra_skills: list[Skill] | None = None,
     doctrine: str | None = None,
+    emitter=None,
 ):
     child_depth = depth + 1
 
@@ -462,10 +490,12 @@ def _make_rlm_spawn(
                 "predict() calls, then SUBMIT."
             )
         spawn_stats[child_depth] += 1
+        if emitter is not None:
+            emitter.emit("spawn_started", depth=child_depth, task_chars=len(task))
         child = build_rlm(
             cfg, main_lm, sub_lm, depth=child_depth, spawn_stats=spawn_stats,
             budget=budget, extra_tools=extra_tools, extra_skills=extra_skills,
-            doctrine=doctrine,
+            doctrine=doctrine, emitter=emitter,
         )
         try:
             prediction = await child.acall(task=task, data=data)
@@ -475,6 +505,8 @@ def _make_rlm_spawn(
             # release the child's runner process here or it outlives the spawn.
             if child.rrlm_owned_interpreter is not None:
                 await asyncio.to_thread(child.rrlm_owned_interpreter.shutdown)
+            if emitter is not None:
+                emitter.emit("spawn_finished", depth=child_depth)
         return prediction.answer
 
     return rlm_spawn

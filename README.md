@@ -265,6 +265,36 @@ rrlm-solve --engine reference -i count-lines -d @big.log     # protocol smoke te
 rrlm-doctor                                                  # lists installed engines
 ```
 
+## MCP tools and progress events (opt-in)
+
+Mount any stdio MCP server's tools as awaitable host tools for a run (needs
+the `mcp` extra: `uv sync --extra mcp`):
+
+```python
+from rrlm import solve
+from rrlm.mcptools import MCPServerSpec
+
+result = solve(
+    "Look up the vendor in the CRM and report its status.", data=text,
+    mcp=[MCPServerSpec(command="crm-mcp-server", allow=("lookup_vendor",))],
+)
+```
+
+```bash
+rrlm-solve --mcp "crm-mcp-server --profile prod" -i "..." -d @file
+```
+
+The agent sees each tool's name and description and calls
+`await tool_name(...)` from the REPL; connections live exactly as long as the
+run. MCP tools execute host-side with this process's permissions on every
+backend (the sandbox isolates generated Python, not host tools), so prefer
+`allow=` for servers that expose more than the task needs.
+
+For hosts that want live progress, `solve(..., on_event=callback)` streams
+structured events (`run_started`, `llm_call`, `spawn_started`/`spawn_finished`,
+`run_finished`; see `src/rrlm/events.py`), and `rrlm-solve --events` prints
+them as JSONL on stderr while stdout carries the answer.
+
 ## Optimize the doctrine with RLM-GEPA (opt-in)
 
 The doctrine is a text component, so it is optimizable. `rrlm-gepa` (the `gepa`

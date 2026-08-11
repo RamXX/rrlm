@@ -30,6 +30,8 @@ scenario a test needs (the LM's ``api_base`` carries the prefix, e.g.
   session  increments a counter held in the REPL namespace and SUBMITs it, so
            namespace persistence across runs (rrlm.Session) is observable: a
            reused interpreter answers 1, 2, ...; fresh ones always answer 1.
+  mcptool  awaits the mounted MCP `add` tool and SUBMITs its result
+           (exercises rrlm.mcptools end to end with a real MCP server).
 
 The action vs extract vs leaf-predict call is told apart by the dspy ChatAdapter
 output-field markers present in the request body (``[[ ## code ## ]]`` for an
@@ -108,6 +110,9 @@ _FILES_CODE = (
 )
 # Multi-question runs: SUBMIT a list[str], one answer per question.
 _LIST_CODE = 'SUBMIT(answer=[str(len(data)), "second-answer"])'
+# MCP: await a mounted MCP tool from the REPL and submit its result. The tool
+# runs in a real MCP server subprocess (tests/mcp_stub_server.py).
+_MCPTOOL_CODE = "res = await add(a=19, b=23)\nSUBMIT(answer=str(res))"
 # Sessions: increment a counter that lives in the REPL namespace. Two runs on
 # one persistent interpreter answer "1" then "2"; two one-shot runs answer "1"
 # both times. The counter IS the namespace-persistence proof.
@@ -143,6 +148,8 @@ def _select_content(mode: str, body: str, slow_seconds: float) -> str:
             return _action("submit one answer per question", _LIST_CODE)
         if mode == "session":
             return _action("increment a namespace-resident counter", _SESSION_CODE)
+        if mode == "mcptool":
+            return _action("call the mounted MCP add tool", _MCPTOOL_CODE)
         return _action("compute the answer from data", _SUBMIT_CODE)
     if is_leaf:
         # Leaf predict() sub-call: return the single declared output field.

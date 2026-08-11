@@ -38,6 +38,10 @@ web = [
 gepa = [
     "predict-rlm[gepa]>=0.7.0",
 ]
+# Mount stdio MCP servers' tools as host-side agent tools (rrlm.mcptools).
+mcp = [
+    "mcp>=2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/RamXX/rrlm"
@@ -71,6 +75,8 @@ dev = [
     "ruff>=0.9.0",
     # the [gepa] extra, so the offline rrlm.gepa tests run in dev and CI
     "predict-rlm[gepa]>=0.7.0",
+    # the [mcp] extra, so the offline rrlm.mcptools tests run in dev and CI
+    "mcp>=2.0",
 ]
 
 [tool.pytest.ini_options]

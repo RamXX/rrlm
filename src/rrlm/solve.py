@@ -33,9 +33,11 @@ import os
 import sys
 import time
 from collections.abc import Callable
+from contextlib import AsyncExitStack
 from pathlib import Path
 
 from rrlm.config import BACKENDS, HarnessConfig, load_env, resolve_backend
+from rrlm.events import EventEmitter
 from rrlm.harness import RunBudget, build_lm, build_rlm, document_skills_for, make_signature
 from rrlm.metrics import harvest_lm_history, reconcile, summarize
 from rrlm.pi_config import resolve_model
@@ -78,6 +80,8 @@ async def asolve(
     reconcile_cost: bool = True,
     return_trace: bool = False,
     interpreter=None,
+    mcp: list | None = None,
+    on_event=None,
 ) -> dict:
     """Run the RLM-first agent over (instruction, data); return answer + metrics.
 
@@ -126,6 +130,17 @@ async def asolve(
     persists - the caller manages its shutdown. Use :class:`rrlm.Session`
     rather than passing this directly. Without it, the run's interpreter is
     created and shut down here, per call.
+
+    ``mcp`` mounts stdio MCP servers' tools as awaitable host tools for this
+    run (a list of :class:`rrlm.mcptools.MCPServerSpec`; needs the ``mcp``
+    extra). Connections open before the run and close when it ends. MCP tools
+    execute host-side on every backend - see the security note in
+    :mod:`rrlm.mcptools`.
+
+    ``on_event`` receives structured progress dicts as the run advances
+    (``run_started``, ``llm_call``, ``spawn_started``/``spawn_finished``,
+    ``run_finished`` - see :mod:`rrlm.events`). The callback is synchronous,
+    must be fast, and can never break the run (its exceptions are swallowed).
     """
     # Validate the cheap, local things first: files and backend fail fast,
     # before any model resolution or key loading.
@@ -134,16 +149,29 @@ async def asolve(
             "engine= and interpreter= are mutually exclusive: engines are "
             "stateless by contract and own their execution"
         )
+    if engine and mcp:
+        raise ValueError("engine= and mcp= are mutually exclusive: engines own their tools")
     if files:
         missing = [str(p) for p in files if not Path(p).is_file()]
         if missing:
             raise FileNotFoundError(f"input file(s) not found: {', '.join(missing)}")
 
+    emitter = EventEmitter(on_event) if on_event is not None else None
     if engine:
-        return await _solve_with_engine(
+        if emitter:
+            emitter.emit(
+                "run_started", engine=engine,
+                instruction_chars=len(instruction), data_chars=len(data or ""),
+            )
+        result = await _solve_with_engine(
             engine, instruction, data, files=files, answer_type=answer_type,
             timeout_s=timeout_s, max_llm_calls=max_llm_calls, max_cost_usd=max_cost_usd,
         )
+        if emitter:
+            emitter.emit(
+                "run_finished", error=result["error"], wall_clock_s=result["wall_clock_s"]
+            )
+        return result
 
     file_objs = None
     extra_skills = list(skills or [])
@@ -203,35 +231,62 @@ async def asolve(
         attach = getattr(lm, "attach_budget", None)
         if attach is not None:
             attach(budget, role)
+        if emitter is not None:
+            attach_events = getattr(lm, "attach_events", None)
+            if attach_events is not None:
+                attach_events(emitter, role)
 
+    if emitter:
+        emitter.emit(
+            "run_started", backend=backend,
+            instruction_chars=len(instruction), data_chars=len(data or ""),
+        )
     answer, error, spawn_stats = "", None, {}
     prediction = None
     run_trace = None
     rlm = None
     t0 = time.monotonic()
     try:
-        rlm = build_rlm(
-            cfg, main_lm, sub_lm,
-            signature=make_signature(answer_type, with_files=bool(file_objs)),
-            budget=budget, extra_tools=tools, extra_skills=extra_skills,
-            doctrine=doctrine, interpreter=interpreter,
-        )
-        call_kwargs: dict = {"task": instruction, "data": data}
-        if file_objs:
-            call_kwargs["files"] = file_objs
-        coro = rlm.acall(**call_kwargs)
-        if timeout_s and timeout_s > 0:
-            # Hard total wall-clock ceiling: cancel the whole run if it overruns.
-            prediction = await asyncio.wait_for(coro, timeout=timeout_s)
-        else:
-            prediction = await coro
-        answer = prediction.answer
-        run_trace = getattr(prediction, "trace", None)
-        spawn_stats = dict(rlm.spawn_stats)
+        async with AsyncExitStack() as stack:
+            if mcp:
+                # MCP connections live exactly as long as the run: opened here,
+                # closed when the stack exits (success, error, or timeout).
+                from rrlm.mcptools import connect_mcp_servers, mcp_tools_note
+
+                mounted = await connect_mcp_servers(stack, mcp)
+                tools = list(tools or []) + [t.call for t in mounted]
+                from predict_rlm import Skill
+
+                extra_skills = extra_skills + [
+                    Skill(name="mounted-mcp-tools", instructions=mcp_tools_note(mounted))
+                ]
+            rlm = build_rlm(
+                cfg, main_lm, sub_lm,
+                signature=make_signature(answer_type, with_files=bool(file_objs)),
+                budget=budget, extra_tools=tools, extra_skills=extra_skills,
+                doctrine=doctrine, interpreter=interpreter, emitter=emitter,
+            )
+            call_kwargs: dict = {"task": instruction, "data": data}
+            if file_objs:
+                call_kwargs["files"] = file_objs
+            coro = rlm.acall(**call_kwargs)
+            if timeout_s and timeout_s > 0:
+                # Hard total wall-clock ceiling: cancel the whole run on overrun.
+                prediction = await asyncio.wait_for(coro, timeout=timeout_s)
+            else:
+                prediction = await coro
+            answer = prediction.answer
+            run_trace = getattr(prediction, "trace", None)
+            spawn_stats = dict(rlm.spawn_stats)
     except (asyncio.TimeoutError, TimeoutError):
         error = f"TimeoutError: run exceeded timeout_s={timeout_s}s"
     except Exception as exc:  # noqa: BLE001, return the failure to the caller
-        error = f"{type(exc).__name__}: {exc}"
+        # anyio-based components (MCP stdio clients) wrap a single real failure
+        # in an ExceptionGroup during cleanup; unwrap so the error is readable.
+        cause: BaseException = exc
+        while isinstance(cause, BaseExceptionGroup) and len(cause.exceptions) == 1:
+            cause = cause.exceptions[0]
+        error = f"{type(cause).__name__}: {cause}"
         # predict-rlm attaches the RunTrace to the exception; failure traces
         # are the most valuable GEPA signal, so capture them too.
         run_trace = getattr(exc, "trace", None)
@@ -244,6 +299,8 @@ async def asolve(
         if owned is not None:
             await asyncio.to_thread(owned.shutdown)
     wall_clock_s = time.monotonic() - t0
+    if emitter:
+        emitter.emit("run_finished", error=error, wall_clock_s=round(wall_clock_s, 2))
 
     # Capture the predict-rlm RunTrace for later RLM-GEPA, if RRLM_TRACE_DIR is set.
     trace_file = None
@@ -569,6 +626,16 @@ def main() -> None:
         help="override the built-in doctrine with the text in PATH (e.g. an RLM-GEPA winner)",
     )
     parser.add_argument(
+        "--mcp", action="append", dest="mcp", default=None, metavar="CMD",
+        help="mount a stdio MCP server's tools for this run (a shell-quoted command "
+             "line, repeatable; needs the 'mcp' extra). Tools run host-side.",
+    )
+    parser.add_argument(
+        "--events", action="store_true",
+        help="stream structured progress events as JSONL on stderr "
+             "(run_started, llm_call, spawn_*, run_finished)",
+    )
+    parser.add_argument(
         "--web", action="store_true", default=None,
         help="give the agent live web retrieval (web_search/fetch); env RRLM_WEB; needs the 'web' extra",
     )
@@ -585,6 +652,18 @@ def main() -> None:
     doctrine = None
     if args.doctrine:
         doctrine = Path(args.doctrine).read_text(encoding="utf-8")
+
+    mcp = None
+    if args.mcp:
+        from rrlm.mcptools import MCPServerSpec
+
+        mcp = [MCPServerSpec.parse(spec) for spec in args.mcp]
+
+    on_event = None
+    if args.events:
+        # stdout carries the answer/result; events stream on stderr as JSONL.
+        def on_event(event: dict) -> None:
+            print(json.dumps(event, default=str), file=sys.stderr, flush=True)
 
     common = dict(
         main_model=args.main_model,
@@ -603,6 +682,8 @@ def main() -> None:
         web=web,
         files=args.files,
         doctrine=doctrine,
+        mcp=mcp,
+        on_event=on_event,
     )
 
     data = _read_data(args.data)
