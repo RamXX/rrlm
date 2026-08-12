@@ -1,0 +1,41 @@
+#!/bin/sh
+# rrlm-buzz: the one-command Buzz agent. Pi in the middle, rrlm underneath,
+# full ACP over stdio. No arguments, no environment setup: point Buzz's
+# custom harness "command" at this file's absolute path and leave "args"
+# and "env" empty.
+#
+# Everything resolves relative to this checkout (the script's own location),
+# so it survives moves and works from GUI apps like Buzz Desktop, whose
+# processes launch with a minimal PATH: the usual user tool homes are put
+# back explicitly (node for pi's shim, pnpm for pi, ~/.local/bin for uv
+# tools). Fails loudly on stderr if a piece is missing; stdout stays
+# reserved for the ACP protocol.
+
+set -u
+
+ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+
+PATH="$HOME/.local/bin:$HOME/Library/pnpm/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH
+
+RRLM_ACP="$ROOT/.venv/bin/rrlm-acp"
+if [ ! -x "$RRLM_ACP" ]; then
+    echo "rrlm-buzz: $RRLM_ACP not found; run 'uv sync' in $ROOT first" >&2
+    exit 1
+fi
+
+PI_BIN="$(command -v pi || true)"
+if [ -z "$PI_BIN" ]; then
+    echo "rrlm-buzz: the pi CLI is not installed (looked on: $PATH)" >&2
+    exit 1
+fi
+
+# Every rlm_solve run records a full RunTrace (usage, transcript, doctrine)
+# plus an index.jsonl here; the ledger for token accounting and RLM-GEPA
+# training data. runs/ is gitignored; the exporter creates the directory.
+RRLM_TRACE_DIR="$ROOT/runs/buzz-traces"
+export RRLM_TRACE_DIR
+
+exec "$RRLM_ACP" --pi --pi-command "$PI_BIN" -- \
+    -e "$ROOT/pi/extensions/rlm-backend/index.ts" \
+    --skill "$ROOT/pi/skills/rlm-first"

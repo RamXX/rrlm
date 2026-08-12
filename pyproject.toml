@@ -57,6 +57,7 @@ reference = "rrlm.engines:ReferenceEngine"
 [project.scripts]
 rrlm-solve = "rrlm.solve:main"
 rrlm-session = "rrlm.session_server:main"
+rrlm-acp = "rrlm.acp_server:main"
 rrlm-bench = "rrlm.bench.runner:main"
 rrlm-report = "rrlm.bench.report:main"
 rrlm-traces = "rrlm.traces:main"

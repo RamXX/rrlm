@@ -19,6 +19,11 @@ context.
   the **same model Pi is currently using** (read from the tool's execution
   context) and resolves endpoints/credentials from your Pi config; switching
   Pi's model restarts the session with a fresh namespace.
+- `rrlm-acp --pi` (see the [ACP section](../README.md#acp-an-agent-for-buzz-zed-or-any-acp-client)
+  in the main README) exposes this whole Pi-plus-rrlm agent over the Agent
+  Client Protocol, so hosts like Block's Buzz can run it as a persistent
+  conversational agent: one long-lived `pi --mode rpc` per ACP session,
+  streaming Pi's turns and delegating to rrlm underneath.
 - `skills/rlm-first/SKILL.md` teaches the agent *when* to delegate: large
   data, exact aggregation/search over many items, or per-item semantic judgment
   at scale; when to hold a session (`session: true` for follow-up questions

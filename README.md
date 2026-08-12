@@ -285,11 +285,56 @@ Python get the same capability over a line-delimited protocol via the
 `rrlm-session` CLI (one persistent Session on stdin/stdout; see
 `src/rrlm/session_server.py`), which is how the [Pi
 extension](pi/README.md) holds a session across a conversation
-(`rlm_solve(..., session: true)`). Sessions run on the `supervisor`
+(`rlm_solve(..., session: true)`), and over the Agent Client Protocol via
+`rrlm-acp` (see [ACP](#acp-an-agent-for-buzz-zed-or-any-acp-client)). Sessions run on the `supervisor`
 backend (trusted data) only; changing the tool set between calls (e.g.
 toggling `web=`) starts a fresh namespace by design. For warm `sbx`
 containers across one-shot runs (filesystem persistence, not namespace
 persistence) use `RRLM_SBX_NAME`.
+
+## ACP: an agent for Buzz, Zed, or any ACP client
+
+`rrlm-acp` speaks the [Agent Client Protocol](https://agentclientprotocol.com)
+(v1, JSON-RPC over stdio), so any ACP client can spawn it as an agent. It
+serves two very different agents behind one command:
+
+**`rrlm-acp --pi`: the full agent (what a persistent host like Buzz wants).**
+Each ACP session runs one long-lived `pi --mode rpc` subprocess, so the
+ongoing conversation, memory, tools, skills, and extensions all live in Pi,
+where they already work; with the [rlm-backend extension](pi/README.md)
+installed, Pi keeps delegating data-heavy subtasks to rrlm exactly as it does
+in the terminal. Pi's streaming (text, thinking, tool executions) is
+forwarded live as ACP updates; `session/cancel` maps to Pi's `abort`;
+embedded ACP resources are staged to files and referenced by path, so bulk
+data stays out of Pi's context and lands in `rlm_solve` instead. Extension
+UI dialogs are auto-cancelled (headless host), and Pi's stderr passes
+through for diagnostics. Everything after `--` goes to the pi subprocess:
+
+```bash
+rrlm-acp --pi -- --provider anthropic   # any pi flags: -e, --skill, --model, ...
+```
+
+**`rrlm-acp` (no flags): the data oracle.** One persistent
+[`Session`](#multi-turn-sessions-a-persistent-repl-namespace) per ACP
+session: the REPL namespace survives across prompts, but each prompt is one
+budgeted solve with no conversation history. Text blocks are the
+instruction, embedded resources are the data, progress streams as tool-call
+updates. Stdio MCP servers passed at session setup are mounted when the
+`mcp` extra is installed. Right when the client carries the conversation
+itself and needs exact answers over large data.
+
+Both modes configure models and budgets like `rrlm-session`: `--main`,
+`--sub`, `--timeout`, `--max-cost` (in `--pi` mode these export as `RRLM_*`
+into Pi's environment for the extension), or the `RRLM_*` variables
+directly.
+
+For [Block's Buzz](https://github.com/block/buzz), the whole integration
+(the zero-configuration [`scripts/rrlm-buzz`](scripts/rrlm-buzz) launcher,
+harness registration, the model picker, persona delivery, steering,
+cancellation, usage metrics, file handling in channels, a team-ready
+persona, and troubleshooting) is documented in
+[docs/BUZZ.md](docs/BUZZ.md). The protocol subset served (and what is
+deliberately left out) is documented in `src/rrlm/acp_server.py`.
 
 ## Engine plugins (route a run to another solver)
 
@@ -503,6 +548,7 @@ versioning rules.
 | [docs/CONTRACT_V2.md](docs/CONTRACT_V2.md) | Proposal: input polymorphism, resources, and artifacts for the next contract revision |
 | [docs/CI.md](docs/CI.md) | The portable Dagger CI gate, the GitHub Actions workflow, and why repeat runs are fast |
 | [pi/README.md](pi/README.md) | Wiring rrlm into Pi: the `rlm_solve` tool and the routing skill |
+| [docs/BUZZ.md](docs/BUZZ.md) | Running Pi + rrlm as a team agent in Block's Buzz over ACP |
 | [examples/crm](examples/crm) | The code-generation showcase: a local 35B model builds a Go CRM |
 | [experiments/superpowers](experiments/superpowers) | Beyond-context tasks the RLM solves that stuffing cannot |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute; test and lint expectations |
